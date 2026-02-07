@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { X, Send, Loader2, Mail, Mic, Keyboard, Shield } from "lucide-react";
+import { X, Send, Loader2, Mail, Mic, Keyboard, Shield, Volume2 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
