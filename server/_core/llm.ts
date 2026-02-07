@@ -62,6 +62,8 @@ export type InvokeParams = {
   tool_choice?: ToolChoice;
   maxTokens?: number;
   max_tokens?: number;
+  /** Thinking-Budget in Tokens. Standard: 128 (Chat). Fuer Analysen: 2048+ empfohlen. */
+  thinkingBudget?: number;
   outputSchema?: OutputSchema;
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
@@ -296,10 +298,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
+  payload.max_tokens = params.maxTokens || params.max_tokens || 32768;
   payload.thinking = {
-    "budget_tokens": 128
-  }
+    "budget_tokens": params.thinkingBudget || 128
+  };
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,

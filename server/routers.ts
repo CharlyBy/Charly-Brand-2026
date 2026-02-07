@@ -381,12 +381,35 @@ ${analysisText.substring(0, 500)}...`,
             })),
           ];
 
-          // Call LLM
-          const response = await invokeLLM({ messages });
-          const lunaResponseContent = response.choices[0]?.message?.content;
-          const lunaResponse = typeof lunaResponseContent === "string" 
-            ? lunaResponseContent 
-            : "Entschuldigung, ich konnte keine Antwort generieren.";
+          // Call LLM with graceful error handling
+          let lunaResponse: string;
+          try {
+            const response = await invokeLLM({ messages });
+            const lunaResponseContent = response.choices[0]?.message?.content;
+            lunaResponse = typeof lunaResponseContent === "string" 
+              ? lunaResponseContent 
+              : "Entschuldigung, ich konnte gerade keine Antwort generieren. Bitte versuche es gleich noch einmal.";
+          } catch (llmError) {
+            console.error("[Luna Chat] LLM-Aufruf fehlgeschlagen:", llmError instanceof Error ? llmError.message : llmError);
+            
+            // Freundliche Antwort statt technischem Fehler
+            lunaResponse = "Oh, Entschuldigung! Mir ist gerade kurz etwas dazwischengekommen. " +
+              "Kannst du mir das bitte noch einmal schreiben? Ich bin gleich wieder ganz bei dir. 💛";
+            
+            // Speichere Fehler-Antwort trotzdem und gebe sie zurueck
+            // damit der Chat nicht abbricht
+            await addMessage({
+              id: `msg_${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`,
+              conversationId,
+              sender: "luna",
+              content: lunaResponse,
+            });
+
+            return {
+              conversationId,
+              message: lunaResponse,
+            };
+          }
 
           // Save Luna's response
           await addMessage({
@@ -411,24 +434,82 @@ ${analysisText.substring(0, 500)}...`,
             updateData.email = emailMatch[1];
           }
 
-          // Extract Enneagramm type from Luna's response (when she identifies it)
-          // Match Markdown headers (# Der Perfektionist) or explicit type mentions
-          const typePatterns = [
-            { pattern: /#\s*Der Perfektionist|Analyse:\s*Der Perfektionist|Typ 1|Persönlichkeit des Typs.*Perfektionist/i, type: "Typ 1 - Der Perfektionist" },
-            { pattern: /#\s*Der Helfer|Analyse:\s*Der Helfer|Typ 2|Persönlichkeit des Typs.*Helfer/i, type: "Typ 2 - Der Helfer" },
-            { pattern: /#\s*Der Erfolgsmensch|Analyse:\s*Der Erfolgsmensch|Typ 3|Persönlichkeit des Typs.*Erfolgsmensch/i, type: "Typ 3 - Der Erfolgsmensch" },
-            { pattern: /#\s*Der Individualist|Analyse:\s*Der Individualist|Typ 4|Persönlichkeit des Typs.*Individualist/i, type: "Typ 4 - Der Individualist" },
-            { pattern: /#\s*Der (Beobachter|Ikonoklast)|Analyse:\s*Der (Beobachter|Ikonoklast)|Typ 5|Persönlichkeit des Typs.*(Beobachter|Ikonoklast)/i, type: "Typ 5 - Der Beobachter" },
-            { pattern: /#\s*Der Loyale|Analyse:\s*Der Loyale|Typ 6|Persönlichkeit des Typs.*Loyale/i, type: "Typ 6 - Der Loyale" },
-            { pattern: /#\s*Der Enthusiast|Analyse:\s*Der Enthusiast|Typ 7|Persönlichkeit des Typs.*Enthusiast/i, type: "Typ 7 - Der Enthusiast" },
-            { pattern: /#\s*Der Herausforderer|Analyse:\s*Der Herausforderer|Typ 8|Persönlichkeit des Typs.*Herausforderer/i, type: "Typ 8 - Der Herausforderer" },
-            { pattern: /#\s*Der Friedensstifter|Analyse:\s*Der Friedensstifter|Typ 9|Persönlichkeit des Typs.*Friedensstifter/i, type: "Typ 9 - Der Friedensstifter" },
-          ];
-          for (const { pattern, type } of typePatterns) {
-            if (pattern.test(lunaResponse)) {
-              updateData.enneagramType = type;
-              break;
+          // Extract Enneagramm type from Luna's response
+          // Mehrstufige Erkennung: Keyword-Analyse (schnell) + LLM-Seitenkanal (praezise)
+          const enneagramTypeNames: Record<number, string> = {
+            1: "Der Perfektionist", 2: "Der Helfer", 3: "Der Erfolgsmensch",
+            4: "Der Individualist", 5: "Der Beobachter", 6: "Der Loyale",
+            7: "Der Enthusiast", 8: "Der Herausforderer", 9: "Der Friedensstifter",
+          };
+
+          // Stufe 1: Keyword-basierte Schnellerkennung (kostenlos, sofort)
+          const keywordIndicators: Record<number, RegExp> = {
+            1: /perfektionist|hohe Standards|innerer Kritiker|richtig.*machen|Fehler.*vermeiden/i,
+            2: /helf|fuersorge|gebraucht.*werden|anderen.*zuliebe|aufopfer/i,
+            3: /erfolg|leistung|anerkennung|image|effizienz|zielorientiert/i,
+            4: /einzigartig|individuell|tiefe Gefuehle|Melancholie|authentisch.*sein/i,
+            5: /beobacht|zurueckzieh|wissen|analysier|distanz|privat/i,
+            6: /sicherheit|vertrauen|loyal|orientierung|zweifel|stabilitaet/i,
+            7: /enthusias|vielseitig|neue Erfahrung|optimis|Freiheit|Abenteuer/i,
+            8: /herausforderer|stark|direkt|kontroll|durchsetz|gerechtigkeit/i,
+            9: /friedensstifter|harmonie|ausgleich|gelassenheit|vermittl|konfliktvermeid/i,
+          };
+
+          // Zaehle Keyword-Treffer pro Typ
+          let bestKeywordType = 0;
+          let bestKeywordScore = 0;
+          for (const [typeStr, pattern] of Object.entries(keywordIndicators)) {
+            const matches = (lunaResponse.match(pattern) || []).length;
+            if (matches > bestKeywordScore) {
+              bestKeywordScore = matches;
+              bestKeywordType = parseInt(typeStr);
             }
+          }
+
+          // Nur setzen wenn Luna tatsaechlich eine Analyse praesentiert
+          // (mindestens 2 Keyword-Treffer ODER Analyse-Marker vorhanden)
+          const hasAnalysisMarker = /KINDHEIT|STÄRKEN|Persönlichkeit|Analyse|Muster|Grundangst/i.test(lunaResponse);
+          
+          if (bestKeywordType > 0 && (bestKeywordScore >= 2 || hasAnalysisMarker)) {
+            updateData.enneagramType = `Typ ${bestKeywordType} - ${enneagramTypeNames[bestKeywordType]}`;
+            console.log(`[Luna Chat] Enneagramm-Typ erkannt: ${updateData.enneagramType} (Score: ${bestKeywordScore}, Marker: ${hasAnalysisMarker})`);
+          }
+
+          // Stufe 2: Asynchroner LLM-Seitenkanal (praeziser, laueft im Hintergrund)
+          // Nur wenn Analyse-Marker erkannt, aber kein eindeutiger Typ
+          if (hasAnalysisMarker && bestKeywordScore < 2) {
+            // Fire-and-forget: Blockiert nicht die User-Antwort
+            (async () => {
+              try {
+                const extractionResponse = await invokeLLM({
+                  messages: [{
+                    role: 'user',
+                    content: `Analysiere folgende Therapeuten-Antwort und bestimme den Enneagramm-Typ (1-9), falls erkennbar.
+Antworte NUR mit einer Zahl 1-9 oder "0" wenn kein Typ erkennbar.
+
+Antwort des Therapeuten:
+${lunaResponse.substring(0, 2000)}`,
+                  }],
+                  thinkingBudget: 64,
+                  maxTokens: 8,
+                });
+                
+                const extractedType = parseInt(
+                  (typeof extractionResponse.choices[0]?.message?.content === 'string'
+                    ? extractionResponse.choices[0].message.content : '').trim()
+                );
+                
+                if (extractedType >= 1 && extractedType <= 9) {
+                  await updateConversation(conversationId!, {
+                    enneagramType: `Typ ${extractedType} - ${enneagramTypeNames[extractedType]}`,
+                  });
+                  console.log(`[Luna Chat] Enneagramm-Typ via LLM nacherkannt: Typ ${extractedType}`);
+                }
+              } catch (e) {
+                // Stille Fehlerbehandlung – Seitenkanal ist optional
+                console.warn('[Luna Chat] LLM-Typ-Extraktion fehlgeschlagen:', e instanceof Error ? e.message : e);
+              }
+            })();
           }
 
           // Extract main topic from conversation (first user message usually contains it)
@@ -622,7 +703,7 @@ ${analysisText.substring(0, 500)}...`,
 
           console.log('[Generate Detailed Analysis] Calling LLM...');
 
-          // Call LLM to generate analysis
+          // Call LLM to generate analysis (hoeheres Thinking-Budget fuer tiefere Analyse)
           const llmResponse = await invokeLLM({
             messages: [
               {
@@ -630,6 +711,7 @@ ${analysisText.substring(0, 500)}...`,
                 content: prompt,
               },
             ],
+            thinkingBudget: 2048,
           });
 
           const message = llmResponse.choices[0]?.message;
@@ -692,7 +774,7 @@ ${analysisText.substring(0, 500)}...`,
 
           console.log('[Generate And Send Analysis] Starting for', input.userName);
 
-          // Step 1: Generate LLM analysis
+          // Step 1: Generate LLM analysis (hoeheres Thinking-Budget fuer tiefere Analyse)
           const prompt = createAnalysisPrompt({
             primaryType: input.primaryType,
             wing: input.wing,
@@ -709,6 +791,7 @@ ${analysisText.substring(0, 500)}...`,
                 content: prompt,
               },
             ],
+            thinkingBudget: 4096,
             response_format: {
               type: 'json_schema',
               json_schema: {
