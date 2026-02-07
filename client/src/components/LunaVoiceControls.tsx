@@ -1,19 +1,23 @@
 /**
  * LunaVoiceControls - Sprach-Steuerungselemente für den Luna Chat
  * 
- * Enthält:
- * - Mikrofon-Button (Speech-to-Text)
- * - Lautsprecher-Toggle (Text-to-Speech)
- * - Lautstärkeregler
- * - Visuelle Wellenform-Animation
- * - Barrierefreie Bedienung
+ * Zwei Modi:
+ * 1. Schreibmodus (Standard): Textfeld + Send-Button
+ * 2. Sprachmodus: Mikrofon-Button, Luna antwortet per Stimme
+ * 
+ * Features:
+ * - Toggle zwischen Schreib/Sprach-Modus via Button
+ * - Speech-to-Text via Web Speech API (browser-lokal)
+ * - Text-to-Speech via Web Speech API (browser-lokal)
+ * - Wellenform-Animation während Aufnahme/Sprechen
+ * - DSGVO-Einwilligungsdialog beim ersten Wechsel in Sprachmodus
+ * - Gesprochenes wird als Text im Chat angezeigt
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Volume2, VolumeX, Square } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, Square, Keyboard } from "lucide-react";
 import { toast } from "sonner";
-import VoiceConsentDialog from "./VoiceConsentDialog";
 import {
   hasVoiceConsent,
   setVoiceConsent,
@@ -24,48 +28,45 @@ import {
   speakText,
   stopTTS,
   isTTSSpeaking,
-  getTTSEnabled,
-  setTTSEnabled,
-  getTTSVolume,
-  setTTSVolume,
   generateWaveformBars,
 } from "@/lib/luna-voice";
 
+export type VoiceMode = "text" | "voice";
+
 interface LunaVoiceControlsProps {
-  /** Callback wenn Spracherkennung Text liefert */
+  /** Aktueller Modus */
+  mode: VoiceMode;
+  /** Callback zum Moduswechsel */
+  onModeChange: (mode: VoiceMode) => void;
+  /** Callback wenn Spracherkennung Text liefert (final) */
   onTranscript: (text: string) => void;
+  /** Text den Luna vorlesen soll (im Sprachmodus) */
+  textToSpeak?: string;
   /** Ob der Chat gerade auf Antwort wartet */
-  isLoading: boolean;
-  /** Ob der Nutzer gerade tippt */
-  isInputFocused: boolean;
-  /** Letzter Text von Luna zum Vorlesen */
-  lastLunaMessage?: string;
-  /** Ob ein neuer Luna-Text zum Vorlesen bereitsteht */
-  hasNewLunaMessage: boolean;
-  /** Callback wenn TTS abgespielt wird */
-  onTTSStateChange?: (isSpeaking: boolean) => void;
+  isTyping: boolean;
+  /** Ob die Controls deaktiviert sein sollen */
+  disabled?: boolean;
+  /** Callback wenn der Consent-Dialog benötigt wird */
+  onConsentNeeded: () => void;
 }
 
 export default function LunaVoiceControls({
+  mode,
+  onModeChange,
   onTranscript,
-  isLoading,
-  isInputFocused,
-  lastLunaMessage,
-  hasNewLunaMessage,
-  onTTSStateChange,
+  textToSpeak,
+  isTyping,
+  disabled = false,
+  onConsentNeeded,
 }: LunaVoiceControlsProps) {
-  // State
   const [isRecording, setIsRecording] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState("");
-  const [showConsentDialog, setShowConsentDialog] = useState(false);
-  const [ttsEnabled, setTtsEnabledState] = useState(getTTSEnabled());
-  const [ttsVolume, setTtsVolumeState] = useState(getTTSVolume());
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState("");
   const [waveformBars, setWaveformBars] = useState<number[]>([0.1, 0.1, 0.1, 0.1, 0.1]);
-  
+
   const stopRecognitionRef = useRef<(() => void) | null>(null);
   const waveformIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSpokenTextRef = useRef<string>("");
 
   // Wellenform-Animation
   useEffect(() => {
@@ -79,7 +80,6 @@ export default function LunaVoiceControls({
       }
       setWaveformBars([0.1, 0.1, 0.1, 0.1, 0.1]);
     }
-
     return () => {
       if (waveformIntervalRef.current) {
         clearInterval(waveformIntervalRef.current);
@@ -87,12 +87,18 @@ export default function LunaVoiceControls({
     };
   }, [isRecording, isSpeaking]);
 
-  // Auto-Speak neue Luna-Nachrichten
+  // Auto-Speak Luna-Nachrichten im Sprachmodus
   useEffect(() => {
-    if (ttsEnabled && hasNewLunaMessage && lastLunaMessage && !isLoading) {
-      handleSpeak(lastLunaMessage);
+    if (
+      mode === "voice" &&
+      textToSpeak &&
+      !isTyping &&
+      textToSpeak !== lastSpokenTextRef.current
+    ) {
+      lastSpokenTextRef.current = textToSpeak;
+      handleSpeak(textToSpeak);
     }
-  }, [hasNewLunaMessage, lastLunaMessage, ttsEnabled, isLoading]);
+  }, [textToSpeak, mode, isTyping]);
 
   // Cleanup
   useEffect(() => {
@@ -102,13 +108,61 @@ export default function LunaVoiceControls({
     };
   }, []);
 
+  // Wenn Modus wechselt: laufende Aufnahme/TTS stoppen
+  useEffect(() => {
+    if (mode === "text") {
+      if (isRecording) {
+        stopSpeechRecognition();
+        setIsRecording(false);
+        setInterimTranscript("");
+      }
+      if (isSpeaking) {
+        stopTTS();
+        setIsSpeaking(false);
+      }
+    }
+  }, [mode]);
+
   // ============================================
-  // SPEECH-TO-TEXT Handler
+  // MODUS-WECHSEL
+  // ============================================
+
+  const handleToggleMode = useCallback(() => {
+    if (mode === "text") {
+      // Wechsel zu Sprachmodus
+      if (!hasVoiceConsent()) {
+        onConsentNeeded();
+        return;
+      }
+      if (!isSpeechRecognitionSupported()) {
+        toast.error(
+          "Spracherkennung wird in diesem Browser nicht unterstützt. Bitte verwende Chrome, Edge oder Safari.",
+          { duration: 5000 }
+        );
+        return;
+      }
+      onModeChange("voice");
+    } else {
+      // Wechsel zu Textmodus
+      if (isRecording) {
+        stopSpeechRecognition();
+        setIsRecording(false);
+        setInterimTranscript("");
+      }
+      if (isSpeaking) {
+        stopTTS();
+        setIsSpeaking(false);
+      }
+      onModeChange("text");
+    }
+  }, [mode, isRecording, isSpeaking, onModeChange, onConsentNeeded]);
+
+  // ============================================
+  // SPEECH-TO-TEXT
   // ============================================
 
   const handleMicClick = useCallback(() => {
     if (isRecording) {
-      // Aufnahme stoppen
       stopSpeechRecognition();
       if (stopRecognitionRef.current) {
         stopRecognitionRef.current();
@@ -119,28 +173,12 @@ export default function LunaVoiceControls({
       return;
     }
 
-    // Prüfe Einwilligung
-    if (!hasVoiceConsent()) {
-      setShowConsentDialog(true);
-      return;
-    }
-
-    // Prüfe Browser-Unterstützung
-    if (!isSpeechRecognitionSupported()) {
-      toast.error(
-        "Spracherkennung wird in diesem Browser nicht unterstützt. Bitte verwende Chrome, Edge oder Safari.",
-        { duration: 5000 }
-      );
-      return;
-    }
-
     // TTS stoppen falls aktiv
     if (isTTSSpeaking()) {
       stopTTS();
       setIsSpeaking(false);
     }
 
-    // Spracherkennung starten
     const stopFn = startSpeechRecognition({
       language: "de-DE",
       continuous: false,
@@ -165,10 +203,10 @@ export default function LunaVoiceControls({
       },
       onError: (error) => {
         if (error === "CONSENT_REQUIRED") {
-          setShowConsentDialog(true);
+          onConsentNeeded();
           return;
         }
-        if (!error.includes("no-speech")) {
+        if (!error.includes("no-speech") && !error.includes("Keine Sprache")) {
           toast.error(error, { duration: 4000 });
         }
         setIsRecording(false);
@@ -177,80 +215,29 @@ export default function LunaVoiceControls({
     });
 
     stopRecognitionRef.current = stopFn;
-  }, [isRecording, onTranscript]);
+  }, [isRecording, onTranscript, onConsentNeeded]);
 
   // ============================================
-  // TEXT-TO-SPEECH Handler
+  // TEXT-TO-SPEECH
   // ============================================
 
   const handleSpeak = useCallback((text: string) => {
-    if (!isTTSSupported()) {
-      toast.error("Sprachausgabe wird in diesem Browser nicht unterstützt.");
-      return;
-    }
+    if (!isTTSSupported()) return;
 
     speakText({
       text,
-      volume: ttsVolume,
-      onStart: () => {
-        setIsSpeaking(true);
-        onTTSStateChange?.(true);
-      },
-      onEnd: () => {
-        setIsSpeaking(false);
-        onTTSStateChange?.(false);
-      },
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
       onError: (error) => {
         setIsSpeaking(false);
-        onTTSStateChange?.(false);
         console.error("[TTS]", error);
       },
     });
-  }, [ttsVolume, onTTSStateChange]);
+  }, []);
 
   const handleStopSpeaking = useCallback(() => {
     stopTTS();
     setIsSpeaking(false);
-    onTTSStateChange?.(false);
-  }, [onTTSStateChange]);
-
-  const handleToggleTTS = useCallback(() => {
-    const newState = !ttsEnabled;
-    setTtsEnabledState(newState);
-    setTTSEnabled(newState);
-    
-    if (!newState && isSpeaking) {
-      handleStopSpeaking();
-    }
-    
-    toast.success(
-      newState ? "Luna-Stimme aktiviert" : "Luna-Stimme deaktiviert",
-      { duration: 2000 }
-    );
-  }, [ttsEnabled, isSpeaking, handleStopSpeaking]);
-
-  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const vol = parseFloat(e.target.value);
-    setTtsVolumeState(vol);
-    setTTSVolume(vol);
-  }, []);
-
-  // ============================================
-  // CONSENT Handler
-  // ============================================
-
-  const handleConsentAccept = useCallback(() => {
-    setVoiceConsent(true);
-    setShowConsentDialog(false);
-    toast.success("Sprachfunktion aktiviert!", { duration: 2000 });
-    
-    // Direkt Spracherkennung starten nach Einwilligung
-    setTimeout(() => handleMicClick(), 300);
-  }, [handleMicClick]);
-
-  const handleConsentDecline = useCallback(() => {
-    setVoiceConsent(false);
-    setShowConsentDialog(false);
   }, []);
 
   // ============================================
@@ -258,133 +245,117 @@ export default function LunaVoiceControls({
   // ============================================
 
   const voiceSupported = isSpeechRecognitionSupported();
-  const ttsSupported = isTTSSupported();
 
-  // Keine Voice-Steuerung anzeigen, wenn beides nicht unterstützt wird
-  if (!voiceSupported && !ttsSupported) {
-    return null;
-  }
+  // Keine Voice-Steuerung wenn nicht unterstützt
+  if (!voiceSupported) return null;
 
   return (
-    <>
-      <div className="flex items-center gap-1">
-        {/* Wellenform-Animation (sichtbar wenn aktiv) */}
-        {(isRecording || isSpeaking) && (
-          <div 
-            className="flex items-end gap-[2px] h-5 mr-1"
-            role="status"
-            aria-label={isRecording ? "Spracherkennung aktiv" : "Luna spricht"}
-          >
-            {waveformBars.map((height, i) => (
-              <div
-                key={i}
-                className={`w-[3px] rounded-full transition-all duration-150 ${
-                  isRecording ? "bg-red-500" : "bg-primary"
-                }`}
-                style={{ height: `${height * 20}px` }}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Mikrofon-Button */}
-        {voiceSupported && (
-          <Button
-            onClick={handleMicClick}
-            variant={isRecording ? "destructive" : "ghost"}
-            size="icon"
-            className={`shrink-0 h-8 w-8 ${isRecording ? "animate-pulse" : ""}`}
-            title={isRecording ? "Aufnahme stoppen" : "Spracheingabe starten"}
-            aria-label={isRecording ? "Aufnahme stoppen" : "Spracheingabe starten"}
-            aria-pressed={isRecording}
-            disabled={isLoading}
-          >
-            {isRecording ? (
-              <Square className="h-3.5 w-3.5" />
-            ) : (
-              <Mic className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        )}
-
-        {/* TTS-Toggle-Button */}
-        {ttsSupported && (
-          <div className="relative">
+    <div className="flex flex-col">
+      {/* Sprachmodus-Bereich: Aufnahme-UI */}
+      {mode === "voice" && (
+        <div className="px-4 pt-3 pb-1">
+          <div className="flex items-center justify-center gap-3">
+            {/* Zurück zum Textmodus */}
             <Button
-              onClick={handleToggleTTS}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setShowVolumeSlider(!showVolumeSlider);
-              }}
+              onClick={handleToggleMode}
               variant="ghost"
               size="icon"
-              className="shrink-0 h-8 w-8"
-              title={ttsEnabled ? "Luna-Stimme deaktivieren (Rechtsklick: Lautstärke)" : "Luna-Stimme aktivieren"}
-              aria-label={ttsEnabled ? "Luna-Stimme deaktivieren" : "Luna-Stimme aktivieren"}
-              aria-pressed={ttsEnabled}
+              className="shrink-0 h-9 w-9"
+              title="Zum Schreibmodus wechseln"
+              aria-label="Zum Schreibmodus wechseln"
             >
-              {ttsEnabled ? (
-                <Volume2 className="h-3.5 w-3.5 text-primary" />
+              <Keyboard className="h-4 w-4" />
+            </Button>
+
+            {/* Wellenform-Animation */}
+            {(isRecording || isSpeaking) && (
+              <div
+                className="flex items-end gap-[3px] h-6"
+                role="status"
+                aria-label={isRecording ? "Aufnahme laeuft" : "Luna spricht"}
+              >
+                {waveformBars.map((height, i) => (
+                  <div
+                    key={i}
+                    className={`w-[3px] rounded-full transition-all duration-150 ${
+                      isRecording ? "bg-red-500" : "bg-primary"
+                    }`}
+                    style={{ height: `${height * 24}px` }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Hauptaktions-Button: Mikrofon */}
+            <Button
+              onClick={handleMicClick}
+              variant={isRecording ? "destructive" : "default"}
+              size="icon"
+              className={`shrink-0 h-12 w-12 rounded-full ${
+                isRecording ? "animate-pulse shadow-lg shadow-red-500/30" : ""
+              }`}
+              title={isRecording ? "Aufnahme stoppen" : "Sprechen"}
+              aria-label={isRecording ? "Aufnahme stoppen" : "Sprechen"}
+              disabled={disabled || isTyping}
+            >
+              {isRecording ? (
+                <Square className="h-5 w-5" />
               ) : (
-                <VolumeX className="h-3.5 w-3.5" />
+                <Mic className="h-5 w-5" />
               )}
             </Button>
 
-            {/* Lautstärke-Slider (Popup) */}
-            {showVolumeSlider && (
-              <div className="absolute bottom-full right-0 mb-2 bg-background border rounded-lg shadow-lg p-3 w-36 z-10">
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Lautstärke: {Math.round(ttsVolume * 100)}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={ttsVolume}
-                  onChange={handleVolumeChange}
-                  className="w-full accent-primary"
-                  aria-label="Lautstärke der Sprachausgabe"
-                />
-                <button
-                  onClick={() => setShowVolumeSlider(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground mt-1"
-                >
-                  Schließen
-                </button>
+            {/* Wellenform rechts (Symmetrie) */}
+            {(isRecording || isSpeaking) && (
+              <div className="flex items-end gap-[3px] h-6">
+                {waveformBars.map((height, i) => (
+                  <div
+                    key={`r-${i}`}
+                    className={`w-[3px] rounded-full transition-all duration-150 ${
+                      isRecording ? "bg-red-500" : "bg-primary"
+                    }`}
+                    style={{ height: `${waveformBars[4 - i] * 24}px` }}
+                  />
+                ))}
               </div>
             )}
+
+            {/* Stop-Button wenn Luna spricht */}
+            {isSpeaking ? (
+              <Button
+                onClick={handleStopSpeaking}
+                variant="ghost"
+                size="icon"
+                className="shrink-0 h-9 w-9"
+                title="Vorlesen stoppen"
+                aria-label="Vorlesen stoppen"
+              >
+                <VolumeX className="h-4 w-4 text-red-500" />
+              </Button>
+            ) : (
+              <div className="w-9" /> // Platzhalter für Symmetrie
+            )}
           </div>
-        )}
 
-        {/* Stop-Button wenn Luna spricht */}
-        {isSpeaking && (
-          <Button
-            onClick={handleStopSpeaking}
-            variant="ghost"
-            size="icon"
-            className="shrink-0 h-8 w-8"
-            title="Vorlesen stoppen"
-            aria-label="Vorlesen stoppen"
-          >
-            <Square className="h-3.5 w-3.5 text-red-500" />
-          </Button>
-        )}
-      </div>
+          {/* Status-Text */}
+          <p className="text-xs text-center mt-2 text-muted-foreground">
+            {isRecording
+              ? "Ich hoere zu..."
+              : isSpeaking
+              ? "Luna spricht..."
+              : isTyping
+              ? "Luna denkt nach..."
+              : "Tippe auf das Mikrofon zum Sprechen"}
+          </p>
 
-      {/* Interims-Transkript anzeigen */}
-      {interimTranscript && (
-        <div className="text-xs text-muted-foreground italic px-2 py-1 bg-muted/30 rounded animate-pulse">
-          {interimTranscript}...
+          {/* Interims-Transkript */}
+          {interimTranscript && (
+            <div className="text-sm text-center text-muted-foreground italic mt-1 px-4 py-1.5 bg-muted/30 rounded-lg mx-4">
+              &bdquo;{interimTranscript}...&ldquo;
+            </div>
+          )}
         </div>
       )}
-
-      {/* Consent-Dialog */}
-      <VoiceConsentDialog
-        open={showConsentDialog}
-        onAccept={handleConsentAccept}
-        onDecline={handleConsentDecline}
-      />
-    </>
+    </div>
   );
 }

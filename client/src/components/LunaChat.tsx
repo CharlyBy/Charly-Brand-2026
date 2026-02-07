@@ -2,13 +2,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { X, Send, Loader2, Mail } from "lucide-react";
+import { X, Send, Loader2, Mail, Mic, Keyboard, Shield } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UpgradeDialog } from "@/components/UpgradeDialog";
 import { trackLunaChatOpened } from "@/lib/analytics";
-import LunaVoiceControls from "./LunaVoiceControls";
+import LunaVoiceControls, { type VoiceMode } from "./LunaVoiceControls";
+import VoiceConsentDialog from "./VoiceConsentDialog";
+import { hasVoiceConsent, setVoiceConsent, isSpeechRecognitionSupported } from "@/lib/luna-voice";
 
 interface Message {
   id: string;
@@ -22,6 +24,9 @@ interface LunaChatProps {
 }
 
 export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
+  // ============================================
+  // STATE
+  // ============================================
   const [isOpen, setIsOpen] = useState(context === "review");
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -29,17 +34,36 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
       sender: "luna",
       content:
         context === "review"
-          ? "Hallo! Ich bin Luna, Charlys digitale Assistentin. 👋\n\nIch helfe dir gerne dabei, deine Bewertung für Charly zu formulieren!\n\nWas hast du bisher geschrieben oder was möchtest du in deiner Bewertung ausdrücken?"
-          : "Hallo! Ich bin Luna, Charlys digitale Assistentin. 👋\n\nIch bin hier, um dir zu helfen, dein Thema zu verstehen und den passenden nächsten Schritt zu finden.\n\nWie geht es dir heute?",
+          ? "Hallo! Ich bin Luna, Charlys digitale Assistentin. \ud83d\udc4b\n\nIch helfe dir gerne dabei, deine Bewertung fuer Charly zu formulieren!\n\nWas hast du bisher geschrieben oder was moechtest du in deiner Bewertung ausdruecken?"
+          : "Hallo! Ich bin Luna, Charlys digitale Assistentin. \ud83d\udc4b\n\nIch bin hier, um dir zu helfen, dein Thema zu verstehen und den passenden naechsten Schritt zu finden.\n\nWie geht es dir heute?",
       timestamp: new Date(),
     },
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>();
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+
+  // Voice-Modus: "text" (Standard) oder "voice"
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>("text");
+  const [showConsentDialog, setShowConsentDialog] = useState(false);
+  const [consentHintShown, setConsentHintShown] = useState(false);
+
+  // PDF-Funktionalitaet
+  const [lastAnalysisText, setLastAnalysisText] = useState<string | undefined>();
+
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Scroll to the start of the latest message
+  // tRPC Mutations
+  const chatMutation = trpc.luna.chat.useMutation();
+  const sendPDFMutation = trpc.luna.sendAnalysisPDF.useMutation();
+
+  // ============================================
+  // SCROLL
+  // ============================================
   const scrollToLatestMessage = () => {
     if (latestMessageRef.current) {
       latestMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -47,279 +71,207 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
   };
 
   useEffect(() => {
-    // Only scroll to latest message if it's from Luna (not user messages)
-    if (messages.length > 0 && messages[messages.length - 1].sender === 'luna') {
+    if (messages.length > 0 && messages[messages.length - 1].sender === "luna") {
       scrollToLatestMessage();
     }
   }, [messages]);
 
+  // ============================================
+  // EVENTS
+  // ============================================
   useEffect(() => {
     const handleOpenChat = () => {
       setIsOpen(true);
       trackLunaChatOpened();
     };
-    window.addEventListener('openLunaChat', handleOpenChat);
-    return () => window.removeEventListener('openLunaChat', handleOpenChat);
+    window.addEventListener("openLunaChat", handleOpenChat);
+    return () => window.removeEventListener("openLunaChat", handleOpenChat);
   }, []);
 
-  const chatMutation = trpc.luna.chat.useMutation();
-  const sendPDFMutation = trpc.luna.sendAnalysisPDF.useMutation();
-  const [conversationId, setConversationId] = useState<string | undefined>();
-  const [userEmail, setUserEmail] = useState<string | undefined>();
-  const [userName, setUserName] = useState<string | undefined>();
-  const [showPDFPrompt, setShowPDFPrompt] = useState(false);
-  const [pdfEmailInput, setPDFEmailInput] = useState("");
-  const [pdfNameInput, setPDFNameInput] = useState("");
-  const [lastAnalysisText, setLastAnalysisText] = useState<string | undefined>();
-  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
-  
-  // Voice functionality state
-  const [isRecording, setIsRecording] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(false);
-  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const transcribeMutation = trpc.luna.transcribeVoice.useMutation();
+  // ============================================
+  // NACHRICHTEN SENDEN (Kern-Logik)
+  // ============================================
+  const sendMessage = useCallback(
+    async (messageText: string) => {
+      if (!messageText.trim() || chatMutation.isPending) return;
 
-  // Voice handlers
-  const handleMicClick = async () => {
-    if (isRecording) {
-      // Stop recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-      setIsRecording(false);
-      return;
-    }
+      // User-Nachricht anzeigen
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        sender: "user",
+        content: messageText.trim(),
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      setInputValue("");
+      setIsTyping(true);
 
-    // Start recording
-    if (!isAudioRecordingSupported()) {
-      toast.error('Audioaufnahme wird in diesem Browser nicht unterstützt.');
-      return;
-    }
+      const startTime = Date.now();
 
-    setIsRecording(true);
-    
-    try {
-      const recorder = await startAudioRecording(
-        async (audioBlob: Blob) => {
-          // Upload audio to get URL
-          const formData = new FormData();
-          formData.append('file', audioBlob, 'recording.webm');
-          
-          try {
-            // Upload to storage (using fetch to /api/upload endpoint)
-            const uploadResponse = await fetch('/api/upload', {
-              method: 'POST',
-              body: formData,
-            });
-            
-            if (!uploadResponse.ok) {
-              throw new Error('Upload failed');
-            }
-            
-            const { url } = await uploadResponse.json();
-            
-            // Transcribe audio
-            const result = await transcribeMutation.mutateAsync({ audioUrl: url });
-            
-            if (result.success) {
-              setInputValue(result.transcript);
-              toast.success('Sprache erkannt!');
-            }
-          } catch (error) {
-            console.error('Transcription error:', error);
-            toast.error('Fehler bei der Spracherkennung. Bitte versuche es erneut.');
-          }
-          
-          setIsRecording(false);
-        },
-        (error: string) => {
-          toast.error(error);
-          setIsRecording(false);
-        }
-      );
-      
-      mediaRecorderRef.current = recorder;
-    } catch (error) {
-      console.error('Recording error:', error);
-      toast.error('Fehler beim Starten der Aufnahme.');
-      setIsRecording(false);
-    }
-  };
-
-  // Stop currently playing audio
-  const stopSpeaking = () => {
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      setCurrentAudio(null);
-    }
-  };
-
-  // Speak text using OpenAI TTS (simple REST endpoint)
-  const speakText = async (text: string) => {
-    try {
-      // Stop any currently playing audio
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        setCurrentAudio(null);
-      }
-
-      // Use simple fetch-based TTS
-      await speakTextSimple(text);
-    } catch (error) {
-      console.error('[TTS] Error:', error);
-      throw error;
-    }
-  };
-
-  const toggleAutoSpeak = () => {
-    if (autoSpeak) {
-      stopSpeaking();
-    }
-    setAutoSpeak(!autoSpeak);
-  };
-
-  // Auto-speak Luna's responses when autoSpeak is enabled
-  useEffect(() => {
-    if (autoSpeak && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage.sender === 'luna' && !isTyping) {
-        // Use OpenAI TTS with shimmer voice
-        speakText(lastMessage.content).catch((error: any) => {
-          console.error('TTS error:', error);
-          toast.error('Fehler beim Abspielen der Stimme.');
+      try {
+        const response = await chatMutation.mutateAsync({
+          conversationId,
+          message: messageText.trim(),
+          context,
         });
+
+        // Minimale Typing-Anzeige (800ms)
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 800) {
+          await new Promise((r) => setTimeout(r, 800 - elapsed));
+        }
+
+        setConversationId(response.conversationId);
+
+        const lunaResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          sender: "luna",
+          content: response.message,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, lunaResponse]);
+
+        // PDF-Erkennung
+        if (response.message.includes("KINDHEIT") || response.message.includes("STAERKEN")) {
+          setLastAnalysisText(response.message);
+        }
+
+        // Auto-PDF-Download
+        const mentionsPDF =
+          response.message.includes("PDF") &&
+          (response.message.includes("herunterladen") ||
+            response.message.includes("Download") ||
+            response.message.includes("fertig"));
+
+        if (mentionsPDF && lastAnalysisText) {
+          const recentMsgs = messages.slice(-10);
+          const emailMatch = recentMsgs.find((m) =>
+            m.sender === "user" &&
+            m.content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+          );
+          const nameMatch = recentMsgs.find((m) =>
+            m.sender === "user" && m.content.match(/[A-ZAEOEUE][a-zaeoeueß]+/)
+          );
+
+          if (emailMatch && nameMatch) {
+            const email = emailMatch.content.match(
+              /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+            )![0];
+            const name = nameMatch.content.match(/[A-ZAEOEUE][a-zaeoeueß]+/)![0];
+            setTimeout(() => handleGeneratePDF(email, name), 1500);
+          }
+        }
+      } catch (error: any) {
+        if (error?.message === "CONVERSATION_LIMIT_REACHED") {
+          setShowUpgradeDialog(true);
+          setIsTyping(false);
+          return;
+        }
+
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          sender: "luna",
+          content: "Entschuldigung, es gab einen Fehler. Bitte versuche es erneut.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsTyping(false);
       }
-    }
-  }, [messages, autoSpeak, isTyping, speakText]);
+    },
+    [conversationId, context, chatMutation, lastAnalysisText, messages]
+  );
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-      stopSpeaking();
-    };
-  }, []);
+  // ============================================
+  // INPUT-HANDLER
+  // ============================================
+  const handleSend = () => sendMessage(inputValue);
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || chatMutation.isPending) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      sender: "user",
-      content: inputValue,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    const messageToSend = inputValue;
-    setInputValue("");
-    setIsTyping(true);
-
-    // Ensure typing indicator is visible for at least 800ms
-    const startTime = Date.now();
-
-    try {
-      const response = await chatMutation.mutateAsync({
-        conversationId,
-        message: messageToSend,
-        context,
-      });
-
-      // Calculate remaining time to show typing indicator
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, 800 - elapsedTime);
-
-      // Wait for remaining time before showing response
-      if (remainingTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, remainingTime));
-      }
-
-      setConversationId(response.conversationId);
-
-      const lunaResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        sender: "luna",
-        content: response.message,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, lunaResponse]);
-
-      // Check if this is a personality analysis (save for later PDF generation)
-      const hasKindheit = response.message.includes('KINDHEIT');
-      const hasStaerken = response.message.includes('STÄRKEN');
-      
-      if (hasKindheit || hasStaerken) {
-        // This is a personality analysis - save it
-        setLastAnalysisText(response.message);
-      }
-      
-      // Check if Luna mentions PDF download (after analysis is complete)
-      const mentionsPDFDownload = (
-        response.message.includes('PDF') && 
-        (response.message.includes('herunterladen') || 
-         response.message.includes('Download') ||
-         response.message.includes('fertig'))
-      );
-      
-      // Extract email and name from conversation (look in last 10 messages)
-      const emailMatch = messages.slice(-10).find(m => m.sender === 'user' && m.content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/));
-      const nameMatch = messages.slice(-10).find(m => m.sender === 'user' && m.content.match(/[A-ZÄÖÜ][a-zäöüß]+/));
-      
-      // Trigger PDF download if:
-      // 1. Luna mentions PDF download
-      // 2. We have the analysis text
-      // 3. We have email and name from the conversation
-      if (mentionsPDFDownload && lastAnalysisText && emailMatch && nameMatch) {
-        // Automatically generate and download PDF
-        const email = emailMatch.content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)![0];
-        const name = nameMatch.content.match(/[A-ZÄÖÜ][a-zäöüß]+/)![0];
-        
-        console.log('[PDF-Trigger] Detected PDF download trigger:', { email, name, hasAnalysis: !!lastAnalysisText });
-        
-        setTimeout(() => {
-          handleGeneratePDF(email, name);
-        }, 1500);
-      }
-    } catch (error: any) {
-      console.error("Chat error:", error);
-      
-      // Check if it's a conversation limit error
-      if (error?.message === 'CONVERSATION_LIMIT_REACHED') {
-        setShowUpgradeDialog(true);
-        return;
-      }
-      
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        sender: "luna",
-        content: "Entschuldigung, es gab einen Fehler. Bitte versuche es erneut.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
-  const handleGeneratePDF = async (email: string, name: string) => {
-    if (!lastAnalysisText || !conversationId) {
+  // ============================================
+  // VOICE-MODUS HANDLER
+  // ============================================
+
+  // Wenn STT Text liefert → als Nachricht senden
+  const handleVoiceTranscript = useCallback(
+    (text: string) => {
+      if (text.trim()) {
+        sendMessage(text.trim());
+      }
+    },
+    [sendMessage]
+  );
+
+  // Modus-Wechsel
+  const handleModeChange = useCallback((newMode: VoiceMode) => {
+    setVoiceMode(newMode);
+
+    if (newMode === "voice") {
+      toast.success("Sprachmodus aktiviert", { duration: 2000 });
+    }
+  }, []);
+
+  // Consent-Dialog: Wenn User den Sprachmodus will, aber noch keine Einwilligung hat
+  const handleConsentNeeded = useCallback(() => {
+    setShowConsentDialog(true);
+  }, []);
+
+  const handleConsentAccept = useCallback(() => {
+    setVoiceConsent(true);
+    setShowConsentDialog(false);
+    setVoiceMode("voice");
+
+    // Dezenter Hinweis im Chat (statt Popup)
+    if (!consentHintShown) {
+      setConsentHintShown(true);
+      const hintMessage: Message = {
+        id: `hint-${Date.now()}`,
+        sender: "luna",
+        content:
+          "\ud83d\udd0a Sprachmodus aktiviert! Du kannst jetzt mit mir sprechen.\n\n" +
+          "\ud83d\udee1\ufe0f *Datenschutz:* Die Spracherkennung laeuft ueber deinen Browser. " +
+          "Es werden keine Audioaufnahmen gespeichert. " +
+          "Du kannst jederzeit zum Textmodus zurueckwechseln.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, hintMessage]);
+    }
+  }, [consentHintShown]);
+
+  const handleConsentDecline = useCallback(() => {
+    setVoiceConsent(false);
+    setShowConsentDialog(false);
+  }, []);
+
+  // Moduswechsel-Button im Textmodus (Mikrofon-Icon neben Send)
+  const handleTextModeToggle = useCallback(() => {
+    if (!hasVoiceConsent()) {
+      setShowConsentDialog(true);
       return;
     }
+    if (!isSpeechRecognitionSupported()) {
+      toast.error(
+        "Spracherkennung wird in diesem Browser nicht unterstuetzt. Bitte verwende Chrome, Edge oder Safari.",
+        { duration: 5000 }
+      );
+      return;
+    }
+    setVoiceMode("voice");
+  }, []);
+
+  // ============================================
+  // PDF GENERATION
+  // ============================================
+  const handleGeneratePDF = async (email: string, name: string) => {
+    if (!lastAnalysisText || !conversationId) return;
 
     try {
-      // Generate PDF (backend will notify owner with user's email)
       const result = await sendPDFMutation.mutateAsync({
         conversationId,
         userEmail: email,
@@ -327,7 +279,6 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
         analysisText: lastAnalysisText,
       });
 
-      // Download PDF automatically
       if (result.pdfBase64) {
         const byteCharacters = atob(result.pdfBase64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -335,37 +286,50 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        const blob = new Blob([byteArray], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const link = document.createElement("a");
         link.href = url;
-        link.download = result.fileName || 'Persönlichkeitsanalyse.pdf';
+        link.download = result.fileName || "Persoenlichkeitsanalyse.pdf";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       }
 
-      // Add confirmation message
-      const downloadMessage: Message = {
+      const downloadMsg: Message = {
         id: Date.now().toString(),
         sender: "luna",
-        content: "✅ Perfekt! Deine Persönlichkeitsanalyse wurde heruntergeladen. Du findest sie in deinem Download-Ordner.\n\nWenn du tiefer an deinen Themen arbeiten möchtest, empfehle ich dir ein persönliches Gespräch mit Charly. Das Erstgespräch (15 Minuten) ist kostenlos!",
+        content:
+          "\u2705 Perfekt! Deine Persoenlichkeitsanalyse wurde heruntergeladen.\n\n" +
+          "Wenn du tiefer an deinen Themen arbeiten moechtest, empfehle ich dir ein persoenliches Gespraech mit Charly. " +
+          "Das Erstgespraech (15 Minuten) ist kostenlos!",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, downloadMessage]);
+      setMessages((prev) => [...prev, downloadMsg]);
     } catch (error) {
       console.error("PDF generation error:", error);
-      const errorMessage: Message = {
+      const errorMsg: Message = {
         id: Date.now().toString(),
         sender: "luna",
-        content: "Entschuldigung, beim Erstellen der PDF gab es einen Fehler. Bitte versuche es später erneut.",
+        content: "Entschuldigung, beim Erstellen der PDF gab es einen Fehler. Bitte versuche es spaeter erneut.",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMsg]);
     }
   };
 
+  // ============================================
+  // Letzter Luna-Text (fuer TTS im Sprachmodus)
+  // ============================================
+  const lastLunaText =
+    messages.length > 0 && messages[messages.length - 1].sender === "luna" && !isTyping
+      ? messages[messages.length - 1].content
+      : undefined;
+
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <>
       {/* Floating Chat Button */}
@@ -373,7 +337,7 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
         <button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 z-50 h-16 w-16 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center group"
-          aria-label="Chat mit Luna öffnen"
+          aria-label="Chat mit Luna oeffnen"
         >
           <div className="relative">
             <img
@@ -411,13 +375,22 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
-                aria-label="Chat schließen"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                {/* Modus-Anzeige im Header */}
+                {voiceMode === "voice" && (
+                  <div className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-1 mr-1">
+                    <Volume2 className="h-3 w-3 text-white" />
+                    <span className="text-xs text-white">Sprache</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+                  aria-label="Chat schliessen"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -425,7 +398,11 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
               {messages.map((message, index) => (
                 <div
                   key={message.id}
-                  ref={index === messages.length - 1 && message.sender === 'luna' ? latestMessageRef : null}
+                  ref={
+                    index === messages.length - 1 && message.sender === "luna"
+                      ? latestMessageRef
+                      : null
+                  }
                   className={`flex ${
                     message.sender === "user" ? "justify-end" : "justify-start"
                   }`}
@@ -468,161 +445,104 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
                 </div>
               )}
 
-              {/* PDF Email Prompt - REMOVED, now using automatic PDF download */}
-              {false && showPDFPrompt && lastAnalysisText && (
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] bg-card border-2 border-primary rounded-2xl px-4 py-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Mail className="h-5 w-5 text-primary" />
-                      <h4 className="font-semibold text-sm">Möchtest du die Analyse per Email erhalten?</h4>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Ich kann dir deine vollständige Persönlichkeitsanalyse als PDF per Email zusenden.
-                    </p>
-                    <div className="space-y-2 mb-3">
-                      <Input
-                        type="text"
-                        placeholder="Dein Name"
-                        value={pdfNameInput}
-                        onChange={(e) => setPDFNameInput(e.target.value)}
-                        className="text-sm"
-                      />
-                      <Input
-                        type="email"
-                        placeholder="Deine Email-Adresse"
-                        value={pdfEmailInput}
-                        onChange={(e) => setPDFEmailInput(e.target.value)}
-                        className="text-sm"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => {}}
-                        disabled={!pdfEmailInput.trim() || !pdfNameInput.trim() || sendPDFMutation.isPending}
-                        size="sm"
-                        className="flex-1"
-                      >
-                        {sendPDFMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Wird gesendet...
-                          </>
-                        ) : (
-                          <>
-                            <Mail className="h-4 w-4 mr-2" />
-                            PDF zusenden
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        onClick={() => setShowPDFPrompt(false)}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Nein, danke
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
+            {/* Input-Bereich */}
             <div className="border-t border-border bg-background">
-              {/* Voice Status Animations */}
+              {/* Voice Controls (im Sprachmodus) */}
               <LunaVoiceControls
-                onTranscript={(text) => {
-                  setInputValue(text);
-                  // Auto-send nach Spracherkennung
-                  setTimeout(() => {
-                    if (text.trim()) {
-                      setInputValue('');
-                      const userMessage: Message = {
-                        id: Date.now().toString(),
-                        sender: "user",
-                        content: text.trim(),
-                        timestamp: new Date(),
-                      };
-                      setMessages((prev) => [...prev, userMessage]);
-                      setIsTyping(true);
-                      chatMutation.mutateAsync({
-                        conversationId,
-                        message: text.trim(),
-                        context,
-                      }).then((response) => {
-                        setConversationId(response.conversationId);
-                        const lunaResponse: Message = {
-                          id: (Date.now() + 1).toString(),
-                          sender: "luna",
-                          content: response.message,
-                          timestamp: new Date(),
-                        };
-                        setMessages((prev) => [...prev, lunaResponse]);
-                      }).catch((error: any) => {
-                        if (error?.message === 'CONVERSATION_LIMIT_REACHED') {
-                          setShowUpgradeDialog(true);
-                          return;
-                        }
-                        const errorMessage: Message = {
-                          id: (Date.now() + 1).toString(),
-                          sender: "luna",
-                          content: "Entschuldigung, es gab einen Fehler. Bitte versuche es erneut.",
-                          timestamp: new Date(),
-                        };
-                        setMessages((prev) => [...prev, errorMessage]);
-                      }).finally(() => {
-                        setIsTyping(false);
-                      });
-                    }
-                  }, 100);
-                }}
-                textToSpeak={
-                  messages.length > 0 && messages[messages.length - 1].sender === 'luna' && !isTyping
-                    ? messages[messages.length - 1].content
-                    : undefined
-                }
+                mode={voiceMode}
+                onModeChange={handleModeChange}
+                onTranscript={handleVoiceTranscript}
+                textToSpeak={lastLunaText}
                 isTyping={isTyping}
                 disabled={isTyping}
+                onConsentNeeded={handleConsentNeeded}
               />
-              
-              <div className="p-4 pt-2">
-                <div className="flex gap-2 items-center">
-                  <Input
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={handleKeyPress}
-                    placeholder="Schreib Luna eine Nachricht..."
-                    className="flex-1"
-                    disabled={isTyping}
-                  />
-                  <Button
-                    onClick={handleSend}
-                    disabled={!inputValue.trim() || isTyping}
-                    size="icon"
-                    className="shrink-0"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+
+              {/* Text-Input (im Schreibmodus) */}
+              {voiceMode === "text" && (
+                <div className="p-4">
+                  <div className="flex gap-2 items-center">
+                    {/* Mikrofon-Button zum Wechsel in Sprachmodus */}
+                    {isSpeechRecognitionSupported() && (
+                      <Button
+                        onClick={handleTextModeToggle}
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 h-10 w-10"
+                        title="Zum Sprachmodus wechseln"
+                        aria-label="Zum Sprachmodus wechseln"
+                      >
+                        <Mic className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    <Input
+                      ref={inputRef}
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Schreib Luna eine Nachricht..."
+                      className="flex-1"
+                      disabled={isTyping}
+                    />
+                    <Button
+                      onClick={handleSend}
+                      disabled={!inputValue.trim() || isTyping}
+                      size="icon"
+                      className="shrink-0"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Luna ist eine KI-Assistentin und ersetzt keine therapeutische Beratung.{" "}
+                    <a
+                      href="/datenschutz"
+                      className="underline hover:text-primary"
+                      target="_blank"
+                    >
+                      Datenschutz
+                    </a>
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Luna ist eine KI-Assistentin und ersetzt keine therapeutische Beratung.{" "}
-                  <a href="/datenschutz" className="underline hover:text-primary" target="_blank">Datenschutz</a>
-                </p>
-              </div>
+              )}
+
+              {/* Dezenter Datenschutzhinweis im Sprachmodus */}
+              {voiceMode === "voice" && (
+                <div className="px-4 pb-3">
+                  <p className="text-xs text-muted-foreground text-center">
+                    Luna ist eine KI-Assistentin und ersetzt keine therapeutische Beratung.{" "}
+                    <a
+                      href="/datenschutz"
+                      className="underline hover:text-primary"
+                      target="_blank"
+                    >
+                      Datenschutz
+                    </a>
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
         </div>
       )}
+
+      {/* Consent Dialog */}
+      <VoiceConsentDialog
+        open={showConsentDialog}
+        onAccept={handleConsentAccept}
+        onDecline={handleConsentDecline}
+      />
 
       {/* Upgrade Dialog */}
       <UpgradeDialog
         open={showUpgradeDialog}
         onClose={() => setShowUpgradeDialog(false)}
         onUpgradeToPremium={() => {
-          // Redirect to premium checkout page
-          window.location.href = '/premium';
+          window.location.href = "/premium";
         }}
       />
     </>
