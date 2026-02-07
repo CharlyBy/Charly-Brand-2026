@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, slug, title, pdfPath, thumbnailPath FROM knowledge_articles LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3aEcG8dSjZDVmfs.a7b56561bf45 --database 2cmJgcK6US7cEPkic9kVVm --execute SELECT id, slug, title, pdfPath, thumbnailPath FROM knowledge_articles LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "slug": "angst-mut-freiheit",
+      "title": "Angst -> Mut -> Freiheit",
+      "pdfPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/angst-mut-freiheit/document.pdf",
+      "thumbnailPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/angst-mut-freiheit/thumbnail.webp"
+    },
+    {
+      "id": "2",
+      "slug": "die-weisheit-des-koerpers",
+      "title": "Die Weisheit des Körpers",
+      "pdfPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/die-weisheit-des-koerpers/document.pdf",
+      "thumbnailPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/die-weisheit-des-koerpers/thumbnail.webp"
+    },
+    {
+      "id": "30001",
+      "slug": "vom-ueberleben-zum-frieden",
+      "title": "Vom Überleben zum Frieden",
+      "pdfPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/vom-ueberleben-zum-frieden/document.pdf",
+      "thumbnailPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/vom-ueberleben-zum-frieden/thumbnail.webp"
+    },
+    {
+      "id": "60001",
+      "slug": "nicht-falsch-nur-verletzt",
+      "title": "Nicht falsch - nur verletzt!",
+      "pdfPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/nicht-falsch-nur-verletzt/document.pdf",
+      "thumbnailPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/nicht-falsch-nur-verletzt/thumbnail.webp"
+    },
+    {
+      "id": "90001",
+      "slug": "innere-grenzen-wahre-verbindung",
+      "title": "Innere Grenzen -> wahre Verbindung",
+      "pdfPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/innere-grenzen-wahre-verbindung/document.pdf",
+      "thumbnailPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/innere-grenzen-wahre-verbindung/thumbnail.webp"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tslug\ttitle\tpdfPath\tthumbnailPath\n1\tangst-mut-freiheit\tAngst -> Mut -> Freiheit\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/angst-mut-freiheit/document.pdf\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/angst-mut-freiheit/thumbnail.webp\n2\tdie-weisheit-des-koerpers\tDie Weisheit des Körpers\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/die-weisheit-des-koerpers/document.pdf\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/die-weisheit-des-koerpers/thumbnail.webp\n30001\tvom-ueberleben-zum-frieden\tVom Überleben zum Frieden\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/vom-ueberleben-zum-frieden/document.pdf\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/vom-ueberleben-zum-frieden/thumbnail.webp\n60001\tnicht-falsch-nur-verletzt\tNicht falsch - nur verletzt!\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/nicht-falsch-nur-verletzt/document.pdf\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/nicht-falsch-nur-verletzt/thumbnail.webp\n90001\tinnere-grenzen-wahre-verbindung\tInnere Grenzen -> wahre Verbindung\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/innere-grenzen-wahre-verbindung/document.pdf\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/innere-grenzen-wahre-verbindung/thumbnail.webp\n",
+  "stderr": "",
+  "execution_time_ms": 174
+}

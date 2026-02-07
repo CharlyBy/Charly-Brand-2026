@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` MODIFY COLUMN `enneagram_confidence` real;

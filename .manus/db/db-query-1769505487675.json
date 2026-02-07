@@ -1,0 +1,60 @@
+{
+  "query": "SELECT id, email, firstName, enneagramType, mainTopic, outcome, createdAt, updatedAt FROM conversations ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3aEcG8dSjZDVmfs.a7b56561bf45 --database 2cmJgcK6US7cEPkic9kVVm --execute SELECT id, email, firstName, enneagramType, mainTopic, outcome, createdAt, updatedAt FROM conversations ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "conv_1769504850999_gyi3q5cml",
+      "email": "NULL",
+      "firstName": "total",
+      "enneagramType": "NULL",
+      "mainTopic": "Nicht so gut ehrlich gesagt. Ich bin total gestresst weil ich das Gefühl habe, nie alles perfekt zu schaffen.",
+      "outcome": "NULL",
+      "createdAt": "2026-01-27 09:07:31",
+      "updatedAt": "2026-01-27 09:07:38"
+    },
+    {
+      "id": "conv_1769440884948_ib8f7q1pd",
+      "email": "info@charlybrand.de",
+      "firstName": "David",
+      "enneagramType": "NULL",
+      "mainTopic": "Hallo ich bin David, nicht so gut .. habe gerade auf whatsapp gesehen, dass meine Exfreundin einen neuen Partner scheinbar hat",
+      "outcome": "NULL",
+      "createdAt": "2026-01-26 15:21:24",
+      "updatedAt": "2026-01-26 15:32:09"
+    },
+    {
+      "id": "conv_1769419697805_73z1m5z65",
+      "email": "NULL",
+      "firstName": "NULL",
+      "enneagramType": "NULL",
+      "mainTopic": "Test",
+      "outcome": "NULL",
+      "createdAt": "2026-01-26 09:28:17",
+      "updatedAt": "2026-01-26 09:28:21"
+    },
+    {
+      "id": "conv_1769419592288_tm5sbun0u",
+      "email": "NULL",
+      "firstName": "NULL",
+      "enneagramType": "NULL",
+      "mainTopic": "Hallo Luna, kannst du mir helfen?",
+      "outcome": "NULL",
+      "createdAt": "2026-01-26 09:26:32",
+      "updatedAt": "2026-01-26 09:26:37"
+    },
+    {
+      "id": "conv_1769348812700_dfbnhgz2w",
+      "email": "NULL",
+      "firstName": "NULL",
+      "enneagramType": "NULL",
+      "mainTopic": "Was kannst du mir über Angst erzählen?",
+      "outcome": "NULL",
+      "createdAt": "2026-01-25 13:46:52",
+      "updatedAt": "2026-01-25 13:46:58"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tfirstName\tenneagramType\tmainTopic\toutcome\tcreatedAt\tupdatedAt\nconv_1769504850999_gyi3q5cml\tNULL\ttotal\tNULL\tNicht so gut ehrlich gesagt. Ich bin total gestresst weil ich das Gefühl habe, nie alles perfekt zu schaffen.\tNULL\t2026-01-27 09:07:31\t2026-01-27 09:07:38\nconv_1769440884948_ib8f7q1pd\tinfo@charlybrand.de\tDavid\tNULL\tHallo ich bin David, nicht so gut .. habe gerade auf whatsapp gesehen, dass meine Exfreundin einen neuen Partner scheinbar hat\tNULL\t2026-01-26 15:21:24\t2026-01-26 15:32:09\nconv_1769419697805_73z1m5z65\tNULL\tNULL\tNULL\tTest\tNULL\t2026-01-26 09:28:17\t2026-01-26 09:28:21\nconv_1769419592288_tm5sbun0u\tNULL\tNULL\tNULL\tHallo Luna, kannst du mir helfen?\tNULL\t2026-01-26 09:26:32\t2026-01-26 09:26:37\nconv_1769348812700_dfbnhgz2w\tNULL\tNULL\tNULL\tWas kannst du mir über Angst erzählen?\tNULL\t2026-01-25 13:46:52\t2026-01-25 13:46:58\n",
+  "stderr": "",
+  "execution_time_ms": 1505
+}

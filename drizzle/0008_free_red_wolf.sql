@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `enneagram_analysis` text;

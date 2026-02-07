@@ -1,0 +1,24 @@
+{
+  "query": "SELECT id, title, thumbnailPath, pdfPath, pageCount FROM knowledge_articles ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3aEcG8dSjZDVmfs.a7b56561bf45 --database 2cmJgcK6US7cEPkic9kVVm --execute SELECT id, title, thumbnailPath, pdfPath, pageCount FROM knowledge_articles ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "2",
+      "title": "Mehr Selbstvertrauen",
+      "thumbnailPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/a/thumbnail.webp",
+      "pdfPath": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/a/document.pdf",
+      "pageCount": "15"
+    },
+    {
+      "id": "1",
+      "title": "Die Weisheit des Körpers",
+      "thumbnailPath": "/images/weisheit-des-koerpers/thumbnail.webp",
+      "pdfPath": "/Die_Weisheit_des_Körpers.pdf",
+      "pageCount": "15"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttitle\tthumbnailPath\tpdfPath\tpageCount\n2\tMehr Selbstvertrauen\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/a/thumbnail.webp\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030635192/2cmJgcK6US7cEPkic9kVVm/knowledge/a/document.pdf\t15\n1\tDie Weisheit des Körpers\t/images/weisheit-des-koerpers/thumbnail.webp\t/Die_Weisheit_des_Körpers.pdf\t15\n",
+  "stderr": "",
+  "execution_time_ms": 151
+}

@@ -1,0 +1,50 @@
+{
+  "query": "SELECT articleId, COUNT(*) as chunkCount FROM article_chunks GROUP BY articleId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3aEcG8dSjZDVmfs.a7b56561bf45 --database 2cmJgcK6US7cEPkic9kVVm --execute SELECT articleId, COUNT(*) as chunkCount FROM article_chunks GROUP BY articleId;",
+  "rows": [
+    {
+      "articleId": "2",
+      "chunkCount": "16"
+    },
+    {
+      "articleId": "270001",
+      "chunkCount": "15"
+    },
+    {
+      "articleId": "30001",
+      "chunkCount": "11"
+    },
+    {
+      "articleId": "180001",
+      "chunkCount": "13"
+    },
+    {
+      "articleId": "150001",
+      "chunkCount": "22"
+    },
+    {
+      "articleId": "210001",
+      "chunkCount": "11"
+    },
+    {
+      "articleId": "120001",
+      "chunkCount": "11"
+    },
+    {
+      "articleId": "90001",
+      "chunkCount": "15"
+    },
+    {
+      "articleId": "60001",
+      "chunkCount": "14"
+    },
+    {
+      "articleId": "1",
+      "chunkCount": "11"
+    }
+  ],
+  "messages": [],
+  "stdout": "articleId\tchunkCount\n2\t16\n270001\t15\n30001\t11\n180001\t13\n150001\t22\n210001\t11\n120001\t11\n90001\t15\n60001\t14\n1\t11\n",
+  "stderr": "",
+  "execution_time_ms": 211
+}

@@ -1,0 +1,18 @@
+# robots.txt for charlybrand.de
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://www.charlybrand.de/sitemap.xml
+
+# Block admin areas
+Disallow: /admin/
+Disallow: /api/
+
+# Allow important pages
+Allow: /
+Allow: /leistungen
+Allow: /wissen
+Allow: /faq
+Allow: /kontakt
+Allow: /ueber-charly

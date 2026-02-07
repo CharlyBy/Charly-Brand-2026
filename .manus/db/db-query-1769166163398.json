@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO knowledge_articles (\n  slug,\n  title,\n  description,\n  category,\n  thumbnailPath,\n  pdfPath,\n  pageCount,\n  readingTime,\n  published,\n  createdAt,\n  updatedAt\n) VALUES (\n  'weisheit-des-koerpers',\n  'Die Weisheit des Körpers',\n  'Entdecke die neurobiologische Verbindung zwischen Körper und Seele. Basierend auf den Erkenntnissen von Gerald Hüther.',\n  'körper-seele',\n  '/images/weisheit-des-koerpers/thumbnail.webp',\n  '/Die_Weisheit_des_Körpers.pdf',\n  15,\n  8,\n  1,\n  NOW(),\n  NOW()\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3aEcG8dSjZDVmfs.a7b56561bf45 --database 2cmJgcK6US7cEPkic9kVVm --execute INSERT INTO knowledge_articles (\n  slug,\n  title,\n  description,\n  category,\n  thumbnailPath,\n  pdfPath,\n  pageCount,\n  readingTime,\n  published,\n  createdAt,\n  updatedAt\n) VALUES (\n  'weisheit-des-koerpers',\n  'Die Weisheit des Körpers',\n  'Entdecke die neurobiologische Verbindung zwischen Körper und Seele. Basierend auf den Erkenntnissen von Gerald Hüther.',\n  'körper-seele',\n  '/images/weisheit-des-koerpers/thumbnail.webp',\n  '/Die_Weisheit_des_Körpers.pdf',\n  15,\n  8,\n  1,\n  NOW(),\n  NOW()\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 774
+}

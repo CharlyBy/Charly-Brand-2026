@@ -1,0 +1,38 @@
+{
+  "query": "SELECT 'conversations' as table_name, COUNT(*) as count FROM conversations\nUNION ALL\nSELECT 'messages', COUNT(*) FROM messages\nUNION ALL\nSELECT 'knowledge_articles', COUNT(*) FROM knowledge_articles\nUNION ALL\nSELECT 'enneagram_analyses', COUNT(*) FROM enneagram_analyses\nUNION ALL\nSELECT 'subscriptions', COUNT(*) FROM subscriptions\nUNION ALL\nSELECT 'stats', COUNT(*) FROM stats\nUNION ALL\nSELECT 'users', COUNT(*) FROM users;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3aEcG8dSjZDVmfs.a7b56561bf45 --database 2cmJgcK6US7cEPkic9kVVm --execute SELECT 'conversations' as table_name, COUNT(*) as count FROM conversations\nUNION ALL\nSELECT 'messages', COUNT(*) FROM messages\nUNION ALL\nSELECT 'knowledge_articles', COUNT(*) FROM knowledge_articles\nUNION ALL\nSELECT 'enneagram_analyses', COUNT(*) FROM enneagram_analyses\nUNION ALL\nSELECT 'subscriptions', COUNT(*) FROM subscriptions\nUNION ALL\nSELECT 'stats', COUNT(*) FROM stats\nUNION ALL\nSELECT 'users', COUNT(*) FROM users;",
+  "rows": [
+    {
+      "table_name": "knowledge_articles",
+      "count": "5"
+    },
+    {
+      "table_name": "subscriptions",
+      "count": "0"
+    },
+    {
+      "table_name": "conversations",
+      "count": "0"
+    },
+    {
+      "table_name": "enneagram_analyses",
+      "count": "0"
+    },
+    {
+      "table_name": "messages",
+      "count": "0"
+    },
+    {
+      "table_name": "users",
+      "count": "1"
+    },
+    {
+      "table_name": "stats",
+      "count": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "table_name\tcount\nknowledge_articles\t5\nsubscriptions\t0\nconversations\t0\nenneagram_analyses\t0\nmessages\t0\nusers\t1\nstats\t0\n",
+  "stderr": "",
+  "execution_time_ms": 80
+}

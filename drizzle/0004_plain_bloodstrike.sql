@@ -1,0 +1,1 @@
+ALTER TABLE `subscriptions` MODIFY COLUMN `status` enum('active','canceled','past_due','unpaid','incomplete','incomplete_expired','trialing','paused') NOT NULL;
