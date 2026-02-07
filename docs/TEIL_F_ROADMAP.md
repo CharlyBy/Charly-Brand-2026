@@ -66,15 +66,15 @@ Datenschutz  & Backend     Funktion     & SEO        Zukunft
 
 | # | Aufgabe | Datei(en) | Aufwand | Status |
 |---|---|---|---|---|
-| 3.1 | `luna-voice.ts` finalisieren und testen | `client/src/lib/luna-voice.ts` | ✅ Erstellt | ⬜ Integration |
-| 3.2 | `VoiceConsentDialog.tsx` finalisieren | `client/src/components/VoiceConsentDialog.tsx` | ✅ Erstellt | ⬜ Integration |
-| 3.3 | `LunaVoiceControls.tsx` finalisieren | `client/src/components/LunaVoiceControls.tsx` | ✅ Erstellt | ⬜ Integration |
-| 3.4 | Integration in `LunaChat.tsx` | `LunaChat.tsx` | 1-2 Std | ⬜ |
-| 3.5 | Alte Voice-Buttons aus LunaChat entfernen | `LunaChat.tsx` | 15 Min | ⬜ |
-| 3.6 | Datenschutzerklärung: Abschnitt Sprachfunktion | `Datenschutz.tsx` | 30 Min | ⬜ |
-| 3.7 | Browser-Kompatibilität testen (Chrome, Safari, Firefox, Edge) | Manuell | 2-3 Std | ⬜ |
-| 3.8 | Mobile-Test (iOS Safari, Chrome Android) | Manuell | 1-2 Std | ⬜ |
-| 3.9 | Accessibility-Test (Screenreader, Tastatur) | Manuell | 1 Std | ⬜ |
+| 3.1 | `luna-voice.ts` STT/TTS Engine (Web Speech API, browser-lokal) | `client/src/lib/luna-voice.ts` | ✅ Erstellt | ✅ 07.02.2026 |
+| 3.2 | `VoiceConsentDialog.tsx` DSGVO-Einwilligung mit Checkbox | `client/src/components/VoiceConsentDialog.tsx` | ✅ Erstellt | ✅ 07.02.2026 |
+| 3.3 | `LunaVoiceControls.tsx` komplett überarbeitet: mode/onModeChange Interface | `client/src/components/LunaVoiceControls.tsx` | ✅ Neu | ✅ 07.02.2026 |
+| 3.4 | `LunaChat.tsx` komplett überarbeitet: Schreib/Sprach-Toggle, dezenter DSGVO-Hinweis, saubere Architektur | `LunaChat.tsx` | 2 Std | ✅ 07.02.2026 |
+| 3.5 | Alte Voice-States/Funktionen aus LunaChat entfernt (isRecording, autoSpeak, etc.) | `LunaChat.tsx` | 15 Min | ✅ 07.02.2026 |
+| 3.6 | Datenschutzerklärung: Abschnitt Sprachfunktion (bereits in Phase 1.6 erledigt) | `Datenschutz.tsx` | ✅ Phase 1 | ✅ 07.02.2026 |
+| 3.7 | Browser-Kompatibilität testen (Chrome, Safari, Firefox, Edge) | Manuell | 2-3 Std | ⬜ Empfohlen |
+| 3.8 | Mobile-Test (iOS Safari, Chrome Android) | Manuell | 1-2 Std | ⬜ Empfohlen |
+| 3.9 | Accessibility-Test (Screenreader, Tastatur) | Manuell | 1 Std | ⬜ Empfohlen |
 
 **Geschätzter Gesamtaufwand:** 8-12 Stunden (Code ✅, Integration + Tests ausstehend)
 
