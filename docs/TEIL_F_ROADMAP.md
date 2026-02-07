@@ -45,16 +45,15 @@ Datenschutz  & Backend     Funktion     & SEO        Zukunft
 
 | # | Aufgabe | Datei(en) | Aufwand | Status |
 |---|---|---|---|---|
-| 2.1 | Security-Header (CSP, HSTS, X-Frame-Options) | `server/_core/index.ts` | 30 Min | ⬜ |
-| 2.2 | Rate-Limiting für Luna-Chat & Kontaktformular | `server/_core/index.ts` | 45 Min | ⬜ |
-| 2.3 | `sendAnalysisPDF` absichern (protectedProcedure) | `server/routers.ts` | 20 Min | ⬜ |
-| 2.4 | OpenAI TTS-Key: Fallback auf forgeApiKey entfernen | `server/_core/tts.ts` | 10 Min | ⬜ |
-| 2.5 | `voice-tts.ts` entfernen (nicht genutzt, fehlerhaft) | `client/src/lib/voice-tts.ts` | 5 Min | ⬜ |
-| 2.6 | Audiodateien nach Transkription aus S3 löschen | `server/routers.ts` | 30 Min | ⬜ |
-| 2.7 | Chat-Verlauf Löschfrist implementieren (90 Tage) | `server/storage.ts`, neuer Cron | 1-2 Std | ⬜ |
-| 2.8 | `drizzle.config.ts` Error-Message generischer | `drizzle.config.ts` | 5 Min | ⬜ |
-| 2.9 | DATABASE_URL nicht in Error-Logs leaken | `drizzle.config.ts` | 5 Min | ⬜ |
-| 2.10 | `.manus/db/` Debug-Daten in .gitignore | `.gitignore` | 2 Min | ⬜ |
+| 2.1 | Security-Header (CSP, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy) | `server/_core/index.ts` | 30 Min | ✅ 07.02.2026 |
+| 2.2 | Rate-Limiting (Chat 20/min, Kontakt 3/h, Upload 5/min, Voice 10/min, TTS 15/min) | `server/_core/rate-limiter.ts`, `index.ts` | 45 Min | ✅ 07.02.2026 |
+| 2.3 | `sendAnalysisPDF`: Konversations-Validierung + Input-Begrenzung | `server/routers.ts` | 20 Min | ✅ 07.02.2026 |
+| 2.4 | TTS: forgeApiKey-Fallback entfernt, explizite Fehlermeldung | `server/_core/tts.ts` | 10 Min | ✅ 07.02.2026 |
+| 2.5 | `voice-tts.ts` entfernt (ungenutzt, fehlerhafter tRPC-Hook-Aufruf) | gelöscht | 5 Min | ✅ 07.02.2026 |
+| 2.6 | Audio-Cleanup: Dateien nach Transkription sofort aus S3 löschen | `server/routers.ts`, `storage.ts` | 30 Min | ✅ 07.02.2026 |
+| 2.7 | Daten-Retention: 90-Tage Chat, 365-Tage Analysen, Auto-Cleanup + Admin-Endpunkt | `server/db.ts`, `server/_core/index.ts`, `routers.ts` | 1-2 Std | ✅ 07.02.2026 |
+| 2.8 | `drizzle.config.ts`: Generische Fehlermeldung ohne Env-Variablennamen | `drizzle.config.ts` | 5 Min | ✅ 07.02.2026 |
+| 2.9 | Database: Connection-Errors sanitized (URLs redacted) | `server/db.ts` | 5 Min | ✅ 07.02.2026 |
 
 **Geschätzter Gesamtaufwand:** 5-8 Stunden
 
