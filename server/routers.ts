@@ -104,19 +104,57 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // DSGVO: Manueller Cleanup alter Gespräche (Admin-only)
+    cleanupOldData: protectedProcedure
+      .input(z.object({
+        conversationRetentionDays: z.number().min(30).max(365).default(90),
+        analysisRetentionDays: z.number().min(90).max(730).default(365),
+      }).optional())
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { cleanupOldConversations, cleanupOldAnalyses } = await import('./db');
+        
+        const convDays = input?.conversationRetentionDays ?? 90;
+        const analysisDays = input?.analysisRetentionDays ?? 365;
+
+        const convResult = await cleanupOldConversations(convDays);
+        const analysisCount = await cleanupOldAnalyses(analysisDays);
+
+        return {
+          success: true,
+          deletedConversations: convResult.deletedConversations,
+          deletedMessages: convResult.deletedMessages,
+          deletedAnalyses: analysisCount,
+          retentionDays: { conversations: convDays, analyses: analysisDays },
+        };
+      }),
+
     // Send personality analysis PDF via email (for Luna chat - simple version)
+    // Note: Uses publicProcedure because Luna-Chat works without login,
+    // but validates that the conversation exists to prevent abuse.
     sendAnalysisPDF: publicProcedure
       .input(
         z.object({
           conversationId: z.string(),
           userEmail: z.string().email(),
-          userName: z.string(),
-          analysisText: z.string(),
+          userName: z.string().max(100),
+          analysisText: z.string().max(10000), // Limit text length to prevent abuse
         })
       )
       .mutation(async ({ input }) => {
         try {
           const { conversationId, userEmail, userName, analysisText } = input;
+
+          // Validate that the conversation actually exists (prevent abuse)
+          const conversation = await getConversation(conversationId);
+          if (!conversation) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Gespraech nicht gefunden.',
+            });
+          }
 
           // Generate PDF with simple analysis text
           const pdfBuffer = await generatePersonalityAnalysisPDF({
@@ -196,11 +234,22 @@ ${analysisText.substring(0, 500)}...`,
       .mutation(async ({ input }) => {
         try {
           const { transcribeAudio } = await import('./_core/voiceTranscription');
+          const { storageDelete } = await import('./storage');
           
           const result = await transcribeAudio({
             audioUrl: input.audioUrl,
             language: 'de',
           });
+
+          // DSGVO: Audiodatei nach Transkription sofort aus S3 löschen
+          // Stimmdaten sind biometrische personenbezogene Daten
+          try {
+            await storageDelete(input.audioUrl);
+            console.log('[Voice Transcription] Audio file deleted from storage after transcription');
+          } catch (deleteError) {
+            // Log but don't fail the transcription if deletion fails
+            console.error('[Voice Transcription] Failed to delete audio file:', deleteError);
+          }
 
           // Check if it's an error response
           if ('error' in result) {

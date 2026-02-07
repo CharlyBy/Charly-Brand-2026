@@ -9,10 +9,16 @@ import OpenAI from 'openai';
 import { ENV } from './env';
 
 // Initialize OpenAI client
-// Note: TTS requires a real OpenAI API key, not Manus Forge API
+// IMPORTANT: TTS requires a dedicated OpenAI API key.
+// The forgeApiKey is NOT a valid OpenAI key and must never be used here.
+const ttsApiKey = process.env.OPENAI_TTS_KEY || process.env.OPENAI_API_KEY;
+
+if (!ttsApiKey) {
+  console.warn('[TTS] WARNING: Neither OPENAI_TTS_KEY nor OPENAI_API_KEY is set. TTS will not work.');
+}
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_TTS_KEY || process.env.OPENAI_API_KEY || ENV.forgeApiKey,
-  // Don't set baseURL to use OpenAI's default endpoint
+  apiKey: ttsApiKey || 'not-configured',
 });
 
 export interface TTSOptions {
@@ -37,6 +43,10 @@ export async function generateSpeech(options: TTSOptions): Promise<Buffer> {
     speed = 1.0,
     responseFormat = 'mp3',
   } = options;
+
+  if (!ttsApiKey) {
+    throw new Error('TTS is not configured: OPENAI_TTS_KEY or OPENAI_API_KEY is required');
+  }
 
   try {
     const response = await openai.audio.speech.create({
@@ -70,6 +80,10 @@ export async function generateSpeechStream(options: TTSOptions) {
     speed = 1.0,
     responseFormat = 'mp3',
   } = options;
+
+  if (!ttsApiKey) {
+    throw new Error('TTS is not configured: OPENAI_TTS_KEY or OPENAI_API_KEY is required');
+  }
 
   try {
     const response = await openai.audio.speech.create({

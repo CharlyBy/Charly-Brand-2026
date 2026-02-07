@@ -100,3 +100,58 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
     url: await buildDownloadUrl(baseUrl, key, apiKey),
   };
 }
+
+/**
+ * Delete a file from storage
+ * Extracts the storage key from a full URL and issues a DELETE request.
+ * 
+ * DSGVO: Audiodateien müssen nach Transkription gelöscht werden,
+ * da sie personenbezogene Daten (Stimme) enthalten.
+ */
+export async function storageDelete(relKeyOrUrl: string): Promise<boolean> {
+  try {
+    const { baseUrl, apiKey } = getStorageConfig();
+
+    // If a full URL is passed, extract the relative key
+    let key = relKeyOrUrl;
+    if (relKeyOrUrl.startsWith('http')) {
+      // Try to extract path from URL (e.g., voice-recordings/xxx.webm)
+      const urlObj = new URL(relKeyOrUrl);
+      // The path parameter is typically in the URL path or query
+      // For Manus storage, the key is usually the path after the bucket
+      const pathMatch = urlObj.pathname.match(/voice-recordings\/[^?]+/);
+      if (pathMatch) {
+        key = pathMatch[0];
+      } else {
+        // Fallback: use full path after first slash
+        key = urlObj.pathname.replace(/^\/+/, '');
+      }
+    }
+    key = normalizeKey(key);
+
+    const deleteUrl = new URL("v1/storage/delete", ensureTrailingSlash(baseUrl));
+    deleteUrl.searchParams.set("path", key);
+
+    const response = await fetch(deleteUrl, {
+      method: "DELETE",
+      headers: buildAuthHeaders(apiKey),
+    });
+
+    if (response.ok) {
+      console.log(`[Storage] Deleted: ${key}`);
+      return true;
+    }
+
+    // If 404, the file was already deleted - that's ok
+    if (response.status === 404) {
+      console.log(`[Storage] File already deleted: ${key}`);
+      return true;
+    }
+
+    console.error(`[Storage] Failed to delete ${key}: ${response.status} ${response.statusText}`);
+    return false;
+  } catch (error) {
+    console.error('[Storage] Delete error:', error);
+    return false;
+  }
+}

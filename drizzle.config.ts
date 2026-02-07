@@ -2,7 +2,11 @@ import { defineConfig } from "drizzle-kit";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error("DATABASE_URL is required to run drizzle commands");
+  // Generic error message - do not expose environment variable names in production
+  throw new Error(
+    "Database connection string is not configured. " +
+    "Please check your environment variables."
+  );
 }
 
 export default defineConfig({

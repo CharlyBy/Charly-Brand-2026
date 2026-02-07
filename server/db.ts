@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, subscriptions, InsertSubscription, Subscription, conversations, messages, stats, Conversation, InsertConversation, Message, InsertMessage, enneagramAnalyses, EnneagramAnalysis, InsertEnneagramAnalysis } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -11,7 +11,11 @@ export async function getDb() {
     try {
       _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      // SECURITY: Do not log the full error, as it may contain the connection string
+      const safeMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Remove any URL-like strings from the error message
+      const sanitized = safeMessage.replace(/mysql:\/\/[^\s]+/g, 'mysql://***REDACTED***');
+      console.warn("[Database] Failed to connect:", sanitized);
       _db = null;
     }
   }
@@ -406,4 +410,94 @@ export async function getAllEnneagramAnalyses(limit = 100): Promise<EnneagramAna
     .from(enneagramAnalyses)
     .orderBy(desc(enneagramAnalyses.createdAt))
     .limit(limit);
+}
+
+// ============================================
+// DSGVO: Chat-Verlauf Löschung (90 Tage)
+// ============================================
+
+/**
+ * Delete conversations and their messages that are older than the specified number of days.
+ * 
+ * DSGVO Art. 5 Abs. 1 lit. e: Personenbezogene Daten dürfen nur so lange
+ * gespeichert werden, wie es für die Zwecke der Verarbeitung erforderlich ist.
+ * 
+ * @param retentionDays - Number of days to retain data (default: 90)
+ * @returns Number of deleted conversations
+ */
+export async function cleanupOldConversations(retentionDays = 90): Promise<{
+  deletedConversations: number;
+  deletedMessages: number;
+}> {
+  const db = await getDb();
+  if (!db) {
+    console.warn('[Cleanup] Database not available');
+    return { deletedConversations: 0, deletedMessages: 0 };
+  }
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    console.log(`[Cleanup] Deleting conversations older than ${retentionDays} days (before ${cutoffDate.toISOString()})`);
+
+    // Find old conversations
+    const oldConversations = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(lt(conversations.startedAt, cutoffDate));
+
+    if (oldConversations.length === 0) {
+      console.log('[Cleanup] No old conversations to delete');
+      return { deletedConversations: 0, deletedMessages: 0 };
+    }
+
+    let totalDeletedMessages = 0;
+
+    // Delete messages first, then conversations (in batches to avoid large transactions)
+    for (const conv of oldConversations) {
+      const deletedMsgs = await db
+        .delete(messages)
+        .where(eq(messages.conversationId, conv.id));
+      totalDeletedMessages += (deletedMsgs[0] as any)?.affectedRows || 0;
+
+      await db.delete(conversations).where(eq(conversations.id, conv.id));
+    }
+
+    console.log(`[Cleanup] Deleted ${oldConversations.length} conversations and ${totalDeletedMessages} messages`);
+
+    return {
+      deletedConversations: oldConversations.length,
+      deletedMessages: totalDeletedMessages,
+    };
+  } catch (error) {
+    console.error('[Cleanup] Error during conversation cleanup:', error);
+    return { deletedConversations: 0, deletedMessages: 0 };
+  }
+}
+
+/**
+ * Delete old enneagram analyses (optional, for extended cleanup)
+ * 
+ * @param retentionDays - Number of days to retain (default: 365 - 1 year)
+ */
+export async function cleanupOldAnalyses(retentionDays = 365): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    const result = await db
+      .delete(enneagramAnalyses)
+      .where(lt(enneagramAnalyses.createdAt, cutoffDate));
+
+    const deletedCount = (result[0] as any)?.affectedRows || 0;
+    console.log(`[Cleanup] Deleted ${deletedCount} old enneagram analyses`);
+    return deletedCount;
+  } catch (error) {
+    console.error('[Cleanup] Error during analysis cleanup:', error);
+    return 0;
+  }
 }
