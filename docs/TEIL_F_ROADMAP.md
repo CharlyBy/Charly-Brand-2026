@@ -24,15 +24,15 @@ Datenschutz  & Backend     Funktion     & SEO        Zukunft
 
 | # | Aufgabe | Datei(en) | Aufwand | Status |
 |---|---|---|---|---|
-| 1.1 | Cookie-Consent: `analyticsEnabled` auf `false` setzen | `CookieConsent.tsx` | 5 Min | ⬜ |
-| 1.2 | Google Fonts lokal hosten | `index.html`, `public/fonts/` | 30 Min | ⬜ |
-| 1.3 | KI-Disclaimer im Luna-Chat Header | `LunaChat.tsx` | 15 Min | ⬜ |
-| 1.4 | Einwilligungs-Checkbox im Kontaktformular | `Kontakt.tsx` | 20 Min | ⬜ |
-| 1.5 | GA4 Measurement-ID in Env-Variable | `analytics.ts`, `.env` | 15 Min | ⬜ |
-| 1.6 | Datenschutzerklärung ergänzen (OpenAI, Stripe, S3, TTS) | `Datenschutz.tsx` | 1-2 Std | ⬜ |
-| 1.7 | HTML lang="de" setzen | `index.html` | 2 Min | ⬜ |
-| 1.8 | GA4 vs Umami klären und Doppel-Tracking entfernen | `analytics.ts`, `index.html` | 30 Min | ⬜ |
-| 1.9 | Cookie-Widerruf-Button im Footer ergänzen | `Footer.tsx`, `CookieConsent.tsx` | 30 Min | ⬜ |
+| 1.1 | Cookie-Consent: `analyticsEnabled` auf `false` setzen | `CookieConsent.tsx` | 5 Min | ✅ 07.02.2026 |
+| 1.2 | Google Fonts lokal hosten | `index.html`, `public/fonts/`, `index.css` | 30 Min | ✅ 07.02.2026 |
+| 1.3 | KI-Disclaimer im Luna-Chat Header | `LunaChat.tsx` | 15 Min | ✅ 07.02.2026 |
+| 1.4 | Einwilligungs-Checkbox im Kontaktformular + UX-Bug-Fix | `Kontakt.tsx` | 20 Min | ✅ 07.02.2026 |
+| 1.5 | GA4 Measurement-ID in Env-Variable | `analytics.ts`, `.env.example` | 15 Min | ✅ 07.02.2026 |
+| 1.6 | Datenschutzerklärung ergänzen (KI-Chat, Stripe, S3, Voice) | `Datenschutz.tsx` | 1-2 Std | ✅ 07.02.2026 |
+| 1.7 | HTML lang="de" setzen | `index.html` | 2 Min | ✅ 07.02.2026 |
+| 1.8 | GA4 vs Umami klären: Umami consent-abhängig laden | `index.html` | 30 Min | ✅ 07.02.2026 |
+| 1.9 | Cookie-Widerruf-Button im Footer ergänzen | `Footer.tsx` | 30 Min | ✅ 07.02.2026 |
 
 **Geschätzter Gesamtaufwand:** 4-6 Stunden
 
