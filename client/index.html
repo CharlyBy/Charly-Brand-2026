@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
 
   <head>
     <meta charset="UTF-8" />
@@ -9,19 +9,30 @@
     <link rel="icon" type="image/png" href="%VITE_APP_LOGO%" />
     <link rel="apple-touch-icon" href="%VITE_APP_LOGO%" />
     <title>%VITE_APP_TITLE%</title>
-    <!-- Google Fonts: Tenor Sans for professional, elegant typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Tenor+Sans&display=swap" rel="stylesheet" />
+    <!-- Tenor Sans: Lokal gehostet (DSGVO-konform, kein Google-Server-Kontakt) -->
   </head>
 
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+    <!--
+      Umami Analytics: Wird nur geladen wenn VITE_ANALYTICS_ENDPOINT konfiguriert ist.
+      Hinweis: Umami im cookieless-Modus ist DSGVO-konform ohne Consent.
+      Wenn Umami NICHT cookieless laeuft, muss es consent-abhaengig geladen werden.
+    -->
+    <script>
+      (function() {
+        var endpoint = "%VITE_ANALYTICS_ENDPOINT%";
+        var websiteId = "%VITE_ANALYTICS_WEBSITE_ID%";
+        if (endpoint && websiteId && !endpoint.includes("VITE_")) {
+          var s = document.createElement("script");
+          s.defer = true;
+          s.src = endpoint + "/umami";
+          s.setAttribute("data-website-id", websiteId);
+          document.body.appendChild(s);
+        }
+      })();
+    </script>
   </body>
 
 </html>

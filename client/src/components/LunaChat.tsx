@@ -407,7 +407,7 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
                 <div>
                   <h3 className="font-semibold text-white">Luna</h3>
                   <p className="text-xs text-white/80">
-                    Charlys digitale Assistentin
+                    KI-Assistentin · Kein Ersatz fuer Therapie
                   </p>
                 </div>
               </div>
@@ -607,8 +607,8 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Luna ist eine KI-Assistentin und ersetzt keine therapeutische Beratung. 
-                  Deine Gespraeche werden vertraulich behandelt.
+                  Luna ist eine KI-Assistentin und ersetzt keine therapeutische Beratung.{" "}
+                  <a href="/datenschutz" className="underline hover:text-primary" target="_blank">Datenschutz</a>
                 </p>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { trackAdminLogin } from "@/lib/analytics";
+import { Cookie } from "lucide-react";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -88,7 +89,19 @@ export default function Footer() {
                   </span>
                 </Link>
               </li>
-
+              <li>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("cookie-consent");
+                    localStorage.removeItem("analytics-consent");
+                    window.location.reload();
+                  }}
+                  className="text-muted-foreground hover:text-primary transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Cookie className="h-3.5 w-3.5" />
+                  Cookie-Einstellungen
+                </button>
+              </li>
             </ul>
           </div>
         </div>

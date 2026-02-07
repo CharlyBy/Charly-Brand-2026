@@ -1,8 +1,12 @@
 import ReactGA from "react-ga4";
 
-// Initialize Google Analytics
+// Initialize Google Analytics (Measurement-ID via Umgebungsvariable)
 export const initGA = () => {
-  const measurementId = "G-L30F3450BH";
+  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID;
+  if (!measurementId) {
+    console.warn("[Analytics] VITE_GA_MEASUREMENT_ID nicht konfiguriert - GA4 deaktiviert.");
+    return;
+  }
   ReactGA.initialize(measurementId);
 };
 

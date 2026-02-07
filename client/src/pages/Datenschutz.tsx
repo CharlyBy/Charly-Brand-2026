@@ -77,32 +77,141 @@ export default function Datenschutz() {
 
           <section>
             <h2 className="text-2xl font-semibold mb-3">
-              5. Luna KI-Chat und Persönlichkeitsanalyse
+              5. Luna KI-Chat und Pers&ouml;nlichkeitsanalyse
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              Wenn Sie mit Luna, unserer KI-Assistentin, sprechen, werden
-              folgende Daten verarbeitet:
+              Auf unserer Website bieten wir einen KI-gest&uuml;tzten Chat-Assistenten
+              namens &bdquo;Luna&ldquo; an. Luna dient der Erstberatung und Orientierung
+              und <strong>ersetzt keine therapeutische Behandlung</strong>.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              <strong>Hinweis:</strong> Die Kommunikation mit Luna basiert auf
+              k&uuml;nstlicher Intelligenz. Die Antworten werden durch ein KI-Modell
+              generiert und stellen keine therapeutische Beratung oder Diagnose dar.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              Wenn Sie mit Luna sprechen, werden folgende Daten verarbeitet:
             </p>
             <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
-              <li>Gesprächsinhalte (Ihre Nachrichten und Lunas Antworten)</li>
+              <li>Gespr&auml;chsinhalte (Ihre Nachrichten und Lunas Antworten)</li>
               <li>Zeitstempel der Nachrichten</li>
               <li>
                 Optionale Angaben: E-Mail, Vorname (nur wenn Sie diese angeben)
               </li>
               <li>
-                Persönlichkeitsanalyse-Ergebnisse (wenn Sie eine Analyse
+                Pers&ouml;nlichkeitsanalyse-Ergebnisse (wenn Sie eine Analyse
                 anfordern)
               </li>
             </ul>
             <p className="text-muted-foreground leading-relaxed mt-3">
-              <strong>Speicherdauer:</strong> Gesprächsdaten werden gespeichert,
-              um Ihnen eine kontinuierliche Beratung zu ermöglichen. Sie können
-              das Gespräch auch anonym führen (ohne E-Mail-Angabe).
+              <strong>Datenverarbeitung:</strong> Ihre Nachrichten werden zur
+              Generierung der Antworten an einen KI-Dienst (&uuml;ber eine API)
+              &uuml;bermittelt. Der Dienstanbieter verarbeitet die Daten gem&auml;&szlig;
+              einem Auftragsverarbeitungsvertrag (Art.&nbsp;28 DSGVO).
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              <strong>Speicherdauer:</strong> Gespr&auml;chsdaten werden f&uuml;r maximal
+              90&nbsp;Tage gespeichert und anschlie&szlig;end automatisch gel&ouml;scht.
+              Sie k&ouml;nnen jederzeit die L&ouml;schung Ihrer Daten verlangen.
+              Sie k&ouml;nnen das Gespr&auml;ch auch anonym f&uuml;hren (ohne E-Mail-Angabe).
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. a DSGVO
-              (Einwilligung) bzw. Art. 6 Abs. 1 lit. b DSGVO
+              <strong>Rechtsgrundlage:</strong> Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;a DSGVO
+              (Einwilligung) bzw. Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;b DSGVO
               (Vertragsanbahnung).
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-semibold mb-3">
+              5a. Sprachfunktion (Spracheingabe und Sprachausgabe)
+            </h2>
+            <p className="text-muted-foreground leading-relaxed">
+              Unsere Website bietet optional eine Sprachfunktion f&uuml;r die
+              Kommunikation mit Luna an.
+            </p>
+            <h3 className="text-xl font-semibold mb-2 mt-4">Spracheingabe (Speech-to-Text)</h3>
+            <p className="text-muted-foreground leading-relaxed">
+              Die Spracheingabe wird &uuml;ber die Web Speech API Ihres Browsers
+              verarbeitet. Die Audiodaten werden ausschlie&szlig;lich lokal in Ihrem
+              Browser verarbeitet und nicht an unsere Server &uuml;bertragen. Je nach
+              Browser kann der Anbieter (z.&nbsp;B. Google bei Chrome, Apple bei Safari)
+              die Audiodaten zur Spracherkennung verarbeiten. Bitte beachten Sie die
+              Datenschutzhinweise Ihres Browsers.
+            </p>
+            <h3 className="text-xl font-semibold mb-2 mt-4">Sprachausgabe (Text-to-Speech)</h3>
+            <p className="text-muted-foreground leading-relaxed">
+              Die Sprachausgabe erfolgt &uuml;ber die browser-interne
+              SpeechSynthesis-Schnittstelle. Die Texte werden lokal auf Ihrem Ger&auml;t
+              in Sprache umgewandelt. Es werden keine Daten an externe Server &uuml;bertragen.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              <strong>Einwilligung:</strong> Die Sprachfunktion wird erst nach Ihrer
+              ausdr&uuml;cklichen Einwilligung aktiviert (Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;a
+              DSGVO). Sie k&ouml;nnen die Einwilligung jederzeit widerrufen, indem Sie
+              die Sprachfunktion deaktivieren.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>Mikrofon-Berechtigung:</strong> F&uuml;r die Spracheingabe ist der
+              Zugriff auf Ihr Mikrofon erforderlich. Sie k&ouml;nnen diese Berechtigung
+              jederzeit in Ihren Browsereinstellungen widerrufen.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-semibold mb-3">
+              5b. Zahlungsdienstleister (Stripe)
+            </h2>
+            <p className="text-muted-foreground leading-relaxed">
+              F&uuml;r die Abwicklung von Zahlungen nutzen wir den Dienst Stripe, Inc.
+              (354 Oyster Point Blvd, South San Francisco, CA 94080, USA).
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              <strong>Verarbeitete Daten:</strong> E-Mail-Adresse, Zahlungsinformationen,
+              IP-Adresse, Transaktionsdaten.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>Zweck:</strong> Abwicklung von Premium-Abonnements und Zahlungen.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>Rechtsgrundlage:</strong> Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;b DSGVO
+              (Vertragserf&uuml;llung).
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>Drittlandtransfer:</strong> Stripe ist unter dem EU-US Data Privacy
+              Framework zertifiziert. Zus&auml;tzlich bestehen Standardvertragsklauseln
+              (Art.&nbsp;46 Abs.&nbsp;2 lit.&nbsp;c DSGVO).
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              Weitere Informationen:{" "}
+              <a href="https://stripe.com/de/privacy" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                stripe.com/de/privacy
+              </a>
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-semibold mb-3">
+              5c. Cloud-Speicher (AWS S3)
+            </h2>
+            <p className="text-muted-foreground leading-relaxed">
+              Zur Speicherung von Dateien (z.&nbsp;B. PDF-Analysen, Wissensartikel) nutzen
+              wir Amazon Web Services (AWS) S3.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              <strong>Rechtsgrundlage:</strong> Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;f DSGVO
+              (berechtigtes Interesse an sicherer Datenspeicherung).
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>Drittlandtransfer:</strong> AWS ist unter dem EU-US Data Privacy
+              Framework zertifiziert. Der Speicherort ist nach M&ouml;glichkeit ein
+              EU-Rechenzentrum (eu-central-1, Frankfurt).
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-3">
+              Weitere Informationen:{" "}
+              <a href="https://aws.amazon.com/de/privacy/" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                aws.amazon.com/de/privacy
+              </a>
             </p>
           </section>
 
@@ -222,7 +331,7 @@ export default function Datenschutz() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">13. Stand</h2>
             <p className="text-muted-foreground leading-relaxed">
-              15. Januar 2026
+              7. Februar 2026
             </p>
           </section>
         </div>

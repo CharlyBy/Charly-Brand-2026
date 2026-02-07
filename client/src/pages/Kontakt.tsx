@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Mail, MessageCircle, Calendar, MapPin } from "lucide-react";
 import { useState } from "react";
+import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { LEMNISCUS_BOOKING_URL, openLunaChat } from "@/const";
@@ -18,6 +19,7 @@ export default function Kontakt() {
     message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [datenschutzAccepted, setDatenschutzAccepted] = useState(false);
 
   const submitFormMutation = trpc.contact.submitForm.useMutation({
     onSuccess: () => {
@@ -97,10 +99,12 @@ export default function Kontakt() {
                 </div>
                 <h3 className="font-semibold text-lg mb-2">E-Mail schreiben</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Nutze das Kontaktformular unten für deine Nachricht.
+                  Nutze das Kontaktformular unten fuer deine Nachricht.
                 </p>
-                <Button variant="outline" className="w-full" onClick={openLunaChat}>
-                  Mit Luna starten
+                <Button variant="outline" className="w-full" onClick={() => {
+                  document.getElementById('kontaktformular')?.scrollIntoView({ behavior: 'smooth' });
+                }}>
+                  Zum Kontaktformular
                 </Button>
               </CardContent>
             </Card>
@@ -110,7 +114,7 @@ export default function Kontakt() {
           <div className="grid md:grid-cols-2 gap-12 max-w-5xl mx-auto">
             {/* Form */}
             <div>
-              <h2 className="text-2xl font-bold mb-6">Schreib mir</h2>
+              <h2 id="kontaktformular" className="text-2xl font-bold mb-6">Schreib mir</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="name">Name</Label>
@@ -150,11 +154,30 @@ export default function Kontakt() {
                     required
                   />
                 </div>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="datenschutz"
+                    checked={datenschutzAccepted}
+                    onChange={(e) => setDatenschutzAccepted(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-gray-300"
+                    required
+                  />
+                  <label htmlFor="datenschutz" className="text-sm text-muted-foreground leading-relaxed">
+                    Ich habe die{" "}
+                    <Link href="/datenschutz">
+                      <span className="text-primary hover:underline cursor-pointer">
+                        Datenschutzerkl&auml;rung
+                      </span>
+                    </Link>{" "}
+                    gelesen und stimme der Verarbeitung meiner Daten zur Bearbeitung meiner Anfrage zu. *
+                  </label>
+                </div>
                 <Button 
                   type="submit" 
                   className="w-full" 
                   size="lg"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !datenschutzAccepted}
                 >
                   {isSubmitting ? "Wird gesendet..." : "Nachricht senden"}
                 </Button>
