@@ -8,7 +8,7 @@
  * Features:
  * - Toggle zwischen Schreib/Sprach-Modus via Button
  * - Speech-to-Text via Web Speech API (browser-lokal)
- * - Text-to-Speech via Web Speech API (browser-lokal)
+ * - Text-to-Speech via Server (Gemini TTS Sulafat / OpenAI Fallback)
  * - Wellenform-Animation während Aufnahme/Sprechen
  * - DSGVO-Einwilligungsdialog beim ersten Wechsel in Sprachmodus
  * - Gesprochenes wird als Text im Chat angezeigt
@@ -16,11 +16,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Volume2, VolumeX, Square, Keyboard } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, Square, Keyboard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   hasVoiceConsent,
-  setVoiceConsent,
   isSpeechRecognitionSupported,
   isTTSSupported,
   startSpeechRecognition,
@@ -61,6 +60,7 @@ export default function LunaVoiceControls({
 }: LunaVoiceControlsProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoadingTTS, setIsLoadingTTS] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [waveformBars, setWaveformBars] = useState<number[]>([0.1, 0.1, 0.1, 0.1, 0.1]);
 
@@ -87,7 +87,7 @@ export default function LunaVoiceControls({
     };
   }, [isRecording, isSpeaking]);
 
-  // Auto-Speak Luna-Nachrichten im Sprachmodus
+  // Auto-Speak Luna-Nachrichten im Sprachmodus (Server-TTS)
   useEffect(() => {
     if (
       mode === "voice" &&
@@ -116,9 +116,10 @@ export default function LunaVoiceControls({
         setIsRecording(false);
         setInterimTranscript("");
       }
-      if (isSpeaking) {
+      if (isSpeaking || isLoadingTTS) {
         stopTTS();
         setIsSpeaking(false);
+        setIsLoadingTTS(false);
       }
     }
   }, [mode]);
@@ -149,13 +150,14 @@ export default function LunaVoiceControls({
         setIsRecording(false);
         setInterimTranscript("");
       }
-      if (isSpeaking) {
+      if (isSpeaking || isLoadingTTS) {
         stopTTS();
         setIsSpeaking(false);
+        setIsLoadingTTS(false);
       }
       onModeChange("text");
     }
-  }, [mode, isRecording, isSpeaking, onModeChange, onConsentNeeded]);
+  }, [mode, isRecording, isSpeaking, isLoadingTTS, onModeChange, onConsentNeeded]);
 
   // ============================================
   // SPEECH-TO-TEXT
@@ -177,6 +179,7 @@ export default function LunaVoiceControls({
     if (isTTSSpeaking()) {
       stopTTS();
       setIsSpeaking(false);
+      setIsLoadingTTS(false);
     }
 
     const stopFn = startSpeechRecognition({
@@ -206,8 +209,9 @@ export default function LunaVoiceControls({
           onConsentNeeded();
           return;
         }
+        // Stille "no-speech" Fehler nicht anzeigen
         if (!error.includes("no-speech") && !error.includes("Keine Sprache")) {
-          toast.error(error, { duration: 4000 });
+          toast.error(error, { duration: 6000 });
         }
         setIsRecording(false);
         setInterimTranscript("");
@@ -218,19 +222,30 @@ export default function LunaVoiceControls({
   }, [isRecording, onTranscript, onConsentNeeded]);
 
   // ============================================
-  // TEXT-TO-SPEECH
+  // TEXT-TO-SPEECH (Server-seitig)
   // ============================================
 
-  const handleSpeak = useCallback((text: string) => {
-    if (!isTTSSupported()) return;
+  const handleSpeak = useCallback(async (text: string) => {
+    setIsLoadingTTS(true);
 
-    speakText({
+    await speakText({
       text,
-      onStart: () => setIsSpeaking(true),
-      onEnd: () => setIsSpeaking(false),
+      onStart: () => {
+        setIsLoadingTTS(false);
+        setIsSpeaking(true);
+      },
+      onEnd: () => {
+        setIsSpeaking(false);
+        setIsLoadingTTS(false);
+      },
       onError: (error) => {
         setIsSpeaking(false);
+        setIsLoadingTTS(false);
         console.error("[TTS]", error);
+        // Nur bei relevanten Fehlern Toast anzeigen
+        if (!error.includes('abort') && !error.includes('cancel')) {
+          toast.error("Sprachausgabe konnte nicht gestartet werden.", { duration: 4000 });
+        }
       },
     });
   }, []);
@@ -238,6 +253,7 @@ export default function LunaVoiceControls({
   const handleStopSpeaking = useCallback(() => {
     stopTTS();
     setIsSpeaking(false);
+    setIsLoadingTTS(false);
   }, []);
 
   // ============================================
@@ -246,7 +262,7 @@ export default function LunaVoiceControls({
 
   const voiceSupported = isSpeechRecognitionSupported();
 
-  // Keine Voice-Steuerung wenn nicht unterstützt
+  // Keine Voice-Steuerung wenn STT nicht unterstützt
   if (!voiceSupported) return null;
 
   return (
@@ -286,6 +302,13 @@ export default function LunaVoiceControls({
               </div>
             )}
 
+            {/* Lade-Animation wenn TTS generiert wird */}
+            {isLoadingTTS && !isSpeaking && (
+              <div className="flex items-center gap-1 h-6">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              </div>
+            )}
+
             {/* Hauptaktions-Button: Mikrofon */}
             <Button
               onClick={handleMicClick}
@@ -296,7 +319,7 @@ export default function LunaVoiceControls({
               }`}
               title={isRecording ? "Aufnahme stoppen" : "Sprechen"}
               aria-label={isRecording ? "Aufnahme stoppen" : "Sprechen"}
-              disabled={disabled || isTyping}
+              disabled={disabled || isTyping || isLoadingTTS}
             >
               {isRecording ? (
                 <Square className="h-5 w-5" />
@@ -320,8 +343,8 @@ export default function LunaVoiceControls({
               </div>
             )}
 
-            {/* Stop-Button wenn Luna spricht */}
-            {isSpeaking ? (
+            {/* Stop-Button wenn Luna spricht oder TTS lädt */}
+            {(isSpeaking || isLoadingTTS) ? (
               <Button
                 onClick={handleStopSpeaking}
                 variant="ghost"
@@ -341,6 +364,8 @@ export default function LunaVoiceControls({
           <p className="text-xs text-center mt-2 text-muted-foreground">
             {isRecording
               ? "Ich hoere zu..."
+              : isLoadingTTS
+              ? "Luna bereitet ihre Stimme vor..."
               : isSpeaking
               ? "Luna spricht..."
               : isTyping
