@@ -113,6 +113,7 @@ export default function LunaChat({ context = "default" }: LunaChatProps = {}) {
           conversationId,
           message: messageText.trim(),
           context,
+          voiceMode: voiceMode === "voice",
         });
 
         // Minimale Typing-Anzeige (800ms)

@@ -230,6 +230,10 @@ export default function LunaVoiceControls({
 
     await speakText({
       text,
+      onFirstChunkReady: () => {
+        // Erster Audio-Chunk ist da → Lade-Animation stoppen
+        setIsLoadingTTS(false);
+      },
       onStart: () => {
         setIsLoadingTTS(false);
         setIsSpeaking(true);
@@ -242,7 +246,6 @@ export default function LunaVoiceControls({
         setIsSpeaking(false);
         setIsLoadingTTS(false);
         console.error("[TTS]", error);
-        // Nur bei relevanten Fehlern Toast anzeigen
         if (!error.includes('abort') && !error.includes('cancel')) {
           toast.error("Sprachausgabe konnte nicht gestartet werden.", { duration: 4000 });
         }

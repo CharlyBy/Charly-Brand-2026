@@ -283,6 +283,7 @@ ${analysisText.substring(0, 500)}...`,
           message: z.string().min(1),
           userEmail: z.string().email().optional(),
           context: z.enum(["default", "review"]).optional(),
+          voiceMode: z.boolean().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -360,14 +361,24 @@ ${analysisText.substring(0, 500)}...`,
           let systemPrompt: string;
           
           if (input.context === "review") {
-            // Bewertungshilfe-Modus: Verwende speziellen Review-Prompt
             systemPrompt = getLunaReviewPrompt();
           } else if (relevantChunks.length > 0) {
-            // Standard-Modus mit RAG: Verwende RAG-enhanced Prompt
             systemPrompt = getLunaSystemPromptWithRAG(relevantChunks);
           } else {
-            // Standard-Modus ohne RAG: Verwende normalen Prompt
             systemPrompt = getLunaSystemPrompt();
+          }
+
+          // SPRACHMODUS: Antworten kurz und gespraechsnah halten
+          // Reduziert LLM-Generierungszeit UND TTS-Latenz massiv
+          if (input.voiceMode) {
+            systemPrompt += `\n\n### WICHTIG – SPRACHMODUS AKTIV ###
+Der Nutzer spricht per Stimme mit dir. Passe deine Antwort an:
+- MAXIMAL 2-3 Saetze pro Antwort (kurz und praegnant)
+- Keine Aufzaehlungen, keine Markdown-Formatierung, keine Emojis
+- Sprich natuerlich und gespraechsnah, wie in einem echten Gespraech
+- Keine langen Erklaerungen – stelle lieber eine Rueckfrage
+- Vermeide Sonderzeichen, URLs, oder technische Begriffe
+- Antworte direkt und warmherzig, ohne Fuellwoerter`;
           }
           
           const messages: LLMMessage[] = [

@@ -5,6 +5,9 @@
  * Text-to-Speech: Server-seitig via Gemini TTS (Sulafat-Stimme) 
  *                 mit OpenAI-Fallback (shimmer)
  * 
+ * OPTIMIERUNG: Satz-Chunking + parallele Audio-Generierung
+ * → Erster Satz startet in ~1-3s statt 5-10s fuer den ganzen Text
+ * 
  * Datenschutz-Features:
  * - Keine Audioaufnahmen werden gespeichert
  * - STT: Browser-lokal (Chrome sendet an Google – wird im Consent kommuniziert)
@@ -66,14 +69,6 @@ let activeRecognition: any = null;
 let sttRetryCount = 0;
 const MAX_STT_RETRIES = 2;
 
-/**
- * Startet die Spracherkennung (browser-lokal via Web Speech API)
- * 
- * DATENSCHUTZ: Bei Chrome werden Audio-Daten an Google gesendet.
- * Dies wird im Einwilligungsdialog transparent kommuniziert.
- * 
- * Netzwerkfehler werden automatisch 2x wiederholt.
- */
 export function startSpeechRecognition(options: SpeechRecognitionOptions): (() => void) | null {
   if (!isSpeechRecognitionSupported()) {
     options.onError('Spracherkennung wird in diesem Browser nicht unterstützt. Bitte verwende Chrome, Edge oder Safari.');
@@ -85,13 +80,8 @@ export function startSpeechRecognition(options: SpeechRecognitionOptions): (() =
     return null;
   }
 
-  // Vorherige Erkennung stoppen
   if (activeRecognition) {
-    try {
-      activeRecognition.abort();
-    } catch (e) {
-      // Ignore
-    }
+    try { activeRecognition.abort(); } catch (e) { /* ignore */ }
   }
 
   sttRetryCount = 0;
@@ -104,70 +94,48 @@ export function startSpeechRecognition(options: SpeechRecognitionOptions): (() =
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-      sttRetryCount = 0; // Reset bei erfolgreichem Start
+      sttRetryCount = 0;
       options.onStart?.();
     };
 
     recognition.onresult = (event: any) => {
       let transcript = '';
       let isFinal = false;
-
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        transcript += result[0].transcript;
-        if (result.isFinal) {
-          isFinal = true;
-        }
+        transcript += event.results[i][0].transcript;
+        if (event.results[i].isFinal) isFinal = true;
       }
-
       options.onResult(transcript, isFinal);
     };
 
     recognition.onerror = (event: any) => {
-      // Netzwerkfehler: automatisch wiederholen
       if (event.error === 'network' && sttRetryCount < MAX_STT_RETRIES) {
         sttRetryCount++;
-        console.warn(`[STT] Netzwerkfehler, Wiederholungsversuch ${sttRetryCount}/${MAX_STT_RETRIES}...`);
-        
-        // Kurz warten und neu versuchen
+        console.warn(`[STT] Netzwerkfehler, Versuch ${sttRetryCount}/${MAX_STT_RETRIES}...`);
         setTimeout(() => {
           try {
-            const newRecognition = createRecognition();
-            newRecognition.start();
-            activeRecognition = newRecognition;
-          } catch (retryError) {
-            options.onError('Spracherkennung konnte nicht gestartet werden. Bitte pruefe deine Internetverbindung.');
+            const r = createRecognition();
+            r.start();
+            activeRecognition = r;
+          } catch {
+            options.onError('Spracherkennung konnte nicht gestartet werden. Pruefe deine Internetverbindung.');
           }
         }, 500);
         return;
       }
 
-      let errorMessage = 'Fehler bei der Spracherkennung.';
+      const msgs: Record<string, string> = {
+        'not-allowed': 'Mikrofon-Zugriff verweigert. Bitte erlaube den Zugriff in deinen Browser-Einstellungen.',
+        'no-speech': 'Keine Sprache erkannt. Bitte sprich deutlich.',
+        'audio-capture': 'Kein Mikrofon gefunden. Bitte pruefe deine Geraeteeinstellungen.',
+        'network': 'Netzwerkfehler bei der Spracherkennung. Die Spracherkennung benoetigt eine Internetverbindung. Bitte pruefe deine Verbindung.',
+        'service-not-allowed': 'Spracherkennung ist in diesem Browser deaktiviert.',
+        'aborted': '',
+      };
 
-      switch (event.error) {
-        case 'not-allowed':
-          errorMessage = 'Mikrofon-Zugriff verweigert. Bitte erlaube den Zugriff in deinen Browser-Einstellungen.';
-          break;
-        case 'no-speech':
-          errorMessage = 'Keine Sprache erkannt. Bitte sprich deutlich.';
-          break;
-        case 'audio-capture':
-          errorMessage = 'Kein Mikrofon gefunden. Bitte überprüfe deine Geräteeinstellungen.';
-          break;
-        case 'network':
-          errorMessage = 'Netzwerkfehler bei der Spracherkennung. Die Spracherkennung benötigt eine Internetverbindung (Chrome/Edge). Bitte pruefe deine Verbindung und versuche es erneut.';
-          break;
-        case 'aborted':
-          // Stille Abbrüche ignorieren
-          return;
-        case 'service-not-allowed':
-          errorMessage = 'Spracherkennung ist in diesem Browser deaktiviert. Bitte aktiviere sie in den Einstellungen.';
-          break;
-        default:
-          errorMessage = `Spracherkennungsfehler: ${event.error}`;
-      }
-
-      options.onError(errorMessage);
+      const msg = msgs[event.error];
+      if (msg === '') return; // aborted → ignore
+      options.onError(msg || `Spracherkennungsfehler: ${event.error}`);
     };
 
     recognition.onend = () => {
@@ -182,97 +150,80 @@ export function startSpeechRecognition(options: SpeechRecognitionOptions): (() =
     const recognition = createRecognition();
     recognition.start();
     activeRecognition = recognition;
-  } catch (error) {
-    options.onError('Fehler beim Starten der Spracherkennung. Bitte versuche es erneut.');
+  } catch {
+    options.onError('Fehler beim Starten der Spracherkennung.');
     return null;
   }
 
-  // Stop-Funktion zurückgeben
   return () => {
-    try {
-      if (activeRecognition) {
-        activeRecognition.stop();
-      }
-    } catch (e) {
-      // Ignore
-    }
+    try { activeRecognition?.stop(); } catch { /* ignore */ }
   };
 }
 
 export function stopSpeechRecognition(): void {
   if (activeRecognition) {
-    try {
-      activeRecognition.stop();
-    } catch (e) {
-      // Ignore
-    }
+    try { activeRecognition.stop(); } catch { /* ignore */ }
     activeRecognition = null;
   }
 }
 
 // ============================================
-// TEXT-TO-SPEECH (Sprachausgabe) – Server-seitig via Gemini/OpenAI
+// TEXT-TO-SPEECH – Satz-Streaming Pipeline
 // ============================================
+// 
+// Ablauf fuer optimale Latenz:
+// 1. Text an /api/tts/stream senden
+// 2. Server splittet in Saetze, generiert alle parallel
+// 3. Client empfaengt SSE-Events: info → audio → audio → ... → done
+// 4. Audio-Chunks werden in einer Warteschlange gesammelt
+// 5. Sobald Chunk 0 da → sofort abspielen, dann Chunk 1, 2, ...
+//
+// Ergebnis: User hoert den ersten Satz nach ~1-3s statt ~5-10s
 
+let audioQueue: Array<{ url: string; index: number }> = [];
 let currentAudio: HTMLAudioElement | null = null;
-let currentAudioUrl: string | null = null;
+let currentPlayIndex = 0;
 let isSpeakingState = false;
-let ttsAvailable: boolean | null = null; // null = noch nicht geprüft
+let ttsAborted = false;
+let ttsAvailable: boolean | null = null;
 
-/**
- * Prüft ob der Server TTS unterstützt (API-Key konfiguriert)
- * Ergebnis wird gecached.
- */
 export async function checkTTSAvailability(): Promise<boolean> {
   if (ttsAvailable !== null) return ttsAvailable;
-
   try {
-    const response = await fetch('/api/tts/status');
-    if (response.ok) {
-      const data = await response.json();
-      ttsAvailable = data.available === true;
+    const r = await fetch('/api/tts/status');
+    if (r.ok) {
+      const d = await r.json();
+      ttsAvailable = d.available === true;
     } else {
       ttsAvailable = false;
     }
   } catch {
     ttsAvailable = false;
   }
-
   return ttsAvailable;
 }
 
-export function isTTSSupported(): boolean {
-  // Immer true – wird vom Server bereitgestellt, nicht vom Browser
-  return true;
-}
+export function isTTSSupported(): boolean { return true; }
+export function isTTSSpeaking(): boolean { return isSpeakingState; }
 
-export function isTTSSpeaking(): boolean {
-  return isSpeakingState;
-}
-
-// TTS-Einstellungen aus localStorage
 export function getTTSEnabled(): boolean {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem(VOICE_TTS_ENABLED_KEY) === 'true';
 }
-
 export function setTTSEnabled(enabled: boolean): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(VOICE_TTS_ENABLED_KEY, enabled.toString());
-  if (!enabled) {
-    stopTTS();
-  }
+  if (!enabled) stopTTS();
 }
 
 export function getTTSVolume(): number {
   if (typeof window === 'undefined') return 0.8;
-  const vol = parseFloat(localStorage.getItem(VOICE_TTS_VOLUME_KEY) || '0.8');
-  return isNaN(vol) ? 0.8 : Math.min(1, Math.max(0, vol));
+  const v = parseFloat(localStorage.getItem(VOICE_TTS_VOLUME_KEY) || '0.8');
+  return isNaN(v) ? 0.8 : Math.min(1, Math.max(0, v));
 }
-
-export function setTTSVolume(volume: number): void {
+export function setTTSVolume(vol: number): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(VOICE_TTS_VOLUME_KEY, Math.min(1, Math.max(0, volume)).toString());
+  localStorage.setItem(VOICE_TTS_VOLUME_KEY, Math.min(1, Math.max(0, vol)).toString());
 }
 
 export interface TTSOptions {
@@ -281,21 +232,17 @@ export interface TTSOptions {
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (error: string) => void;
+  /** Wird aufgerufen wenn der erste Audio-Chunk bereit ist (Latenz-Indikator) */
+  onFirstChunkReady?: () => void;
 }
 
 /**
- * Spricht Text über den Server-TTS-Endpoint vor.
+ * Spielt Text ueber Satz-Chunking-Pipeline ab.
  * 
- * Ablauf:
- * 1. Text wird an /api/tts gesendet
- * 2. Server generiert Audio via Gemini TTS (Sulafat) oder OpenAI (Fallback)
- * 3. Audio wird als Blob empfangen und über <audio> abgespielt
- * 
- * DATENSCHUTZ: Text wird serverseitig verarbeitet, Audio nicht gespeichert.
- * Object-URL wird nach Abspielen sofort revoked.
+ * Fuer kurze Texte (1 Satz): Direkter /api/tts Aufruf
+ * Fuer laengere Texte: /api/tts/stream mit SSE + Audio-Warteschlange
  */
 export async function speakText(options: TTSOptions): Promise<void> {
-  // Vorherige Sprachausgabe stoppen
   stopTTS();
 
   const text = options.text?.trim();
@@ -304,112 +251,274 @@ export async function speakText(options: TTSOptions): Promise<void> {
     return;
   }
 
+  ttsAborted = false;
+  audioQueue = [];
+  currentPlayIndex = 0;
+
+  // Kurze Texte (1 Satz, <100 Zeichen): Direkter Aufruf (einfacher)
+  const isShort = text.length < 100 && !text.includes('. ') && !text.includes('! ') && !text.includes('? ');
+  
+  if (isShort) {
+    await speakDirect(options, text);
+  } else {
+    await speakStreaming(options, text);
+  }
+}
+
+/** Direkter TTS fuer kurze Texte */
+async function speakDirect(options: TTSOptions, text: string): Promise<void> {
   try {
     isSpeakingState = true;
     options.onStart?.();
 
-    // Server-TTS aufrufen
     const response = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
 
+    if (ttsAborted) return;
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `TTS-Fehler (${response.status})`);
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `TTS-Fehler (${response.status})`);
     }
 
-    // Audio-Blob erstellen
-    const contentType = response.headers.get('Content-Type') || 'audio/wav';
-    const audioBlob = await response.blob();
-    
-    if (audioBlob.size === 0) {
-      throw new Error('Leere Audio-Antwort vom Server');
-    }
+    const blob = await response.blob();
+    if (blob.size === 0) throw new Error('Leere Audio-Antwort');
 
-    // Object-URL erstellen
-    const audioUrl = URL.createObjectURL(audioBlob);
-    currentAudioUrl = audioUrl;
+    const url = URL.createObjectURL(blob);
+    await playAudioUrl(url, options.volume);
+    URL.revokeObjectURL(url);
 
-    // Audio abspielen
-    const audio = new Audio(audioUrl);
-    audio.volume = options.volume ?? getTTSVolume();
-    currentAudio = audio;
-
-    audio.onended = () => {
-      cleanup();
+    if (!ttsAborted) {
+      cleanupTTS();
       options.onEnd?.();
-    };
-
-    audio.onerror = (e) => {
-      cleanup();
-      options.onError?.('Fehler beim Abspielen der Sprachausgabe.');
-    };
-
-    await audio.play();
-
-  } catch (error: any) {
-    isSpeakingState = false;
-    currentAudio = null;
-    
-    // URL aufräumen
-    if (currentAudioUrl) {
-      URL.revokeObjectURL(currentAudioUrl);
-      currentAudioUrl = null;
     }
-
-    const message = error?.message || 'Unbekannter Fehler bei der Sprachausgabe';
-    console.error('[TTS Client]', message);
-    options.onError?.(message);
+  } catch (error: any) {
+    cleanupTTS();
+    if (!ttsAborted) {
+      options.onError?.(error?.message || 'TTS-Fehler');
+    }
   }
 }
 
-function cleanup(): void {
+/** Streaming-TTS mit Satz-Chunking */
+async function speakStreaming(options: TTSOptions, text: string): Promise<void> {
+  try {
+    isSpeakingState = true;
+    // Hinweis: onStart wird noch NICHT aufgerufen – erst wenn der erste Audio-Chunk da ist
+
+    const response = await fetch('/api/tts/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+
+    if (ttsAborted) return;
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `TTS-Stream-Fehler (${response.status})`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('Streaming nicht unterstuetzt');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let firstChunkReceived = false;
+    let totalChunks = 1;
+    let receivedChunks = 0;
+
+    while (true) {
+      if (ttsAborted) { reader.cancel(); break; }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE-Events parsen (data: {...}\n\n)
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || ''; // Letztes Fragment behalten
+
+      for (const eventStr of events) {
+        if (ttsAborted) break;
+
+        const dataLine = eventStr.trim();
+        if (!dataLine.startsWith('data: ')) continue;
+
+        try {
+          const data = JSON.parse(dataLine.slice(6));
+
+          if (data.type === 'info') {
+            totalChunks = data.totalChunks || 1;
+          
+          } else if (data.type === 'audio') {
+            receivedChunks++;
+
+            // Base64 → Blob → Object URL
+            const byteChars = atob(data.audio);
+            const bytes = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) {
+              bytes[i] = byteChars.charCodeAt(i);
+            }
+            const mimeType = data.format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+            const blob = new Blob([bytes], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+
+            audioQueue.push({ url, index: data.index });
+
+            // Erster Chunk: Sofort abspielen starten!
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              options.onFirstChunkReady?.();
+              options.onStart?.();
+              playNextInQueue(options);
+            }
+
+          } else if (data.type === 'skip') {
+            receivedChunks++;
+            // Uebersprungener Satz – einfach weiter
+          
+          } else if (data.type === 'done') {
+            // Alle Chunks empfangen
+          
+          } else if (data.type === 'error') {
+            throw new Error(data.message || 'TTS-Stream-Fehler');
+          }
+        } catch (parseError) {
+          // JSON-Parse-Fehler bei einzelnem Event ignorieren
+          if ((parseError as Error)?.message?.includes('TTS')) throw parseError;
+        }
+      }
+    }
+
+    // Falls kein Audio empfangen wurde
+    if (!firstChunkReceived && !ttsAborted) {
+      throw new Error('Keine Audio-Daten empfangen');
+    }
+
+  } catch (error: any) {
+    cleanupTTS();
+    if (!ttsAborted) {
+      options.onError?.(error?.message || 'TTS-Stream-Fehler');
+    }
+  }
+}
+
+/** Spielt den naechsten Audio-Chunk aus der Warteschlange */
+function playNextInQueue(options: TTSOptions): void {
+  if (ttsAborted) {
+    cleanupTTS();
+    return;
+  }
+
+  // Suche den naechsten Chunk der Reihe nach
+  const nextChunk = audioQueue.find(c => c.index === currentPlayIndex);
+  
+  if (!nextChunk) {
+    // Chunk noch nicht da – warte kurz und versuche erneut
+    // (kommt vor wenn Chunk 2 vor Chunk 1 fertig wird)
+    if (audioQueue.some(c => c.index > currentPlayIndex) || isSpeakingState) {
+      setTimeout(() => playNextInQueue(options), 100);
+    } else {
+      // Keine weiteren Chunks → fertig
+      cleanupTTS();
+      options.onEnd?.();
+    }
+    return;
+  }
+
+  // Chunk abspielen
+  const audio = new Audio(nextChunk.url);
+  audio.volume = options.volume ?? getTTSVolume();
+  currentAudio = audio;
+
+  audio.onended = () => {
+    // URL freigeben
+    URL.revokeObjectURL(nextChunk.url);
+    audioQueue = audioQueue.filter(c => c.index !== currentPlayIndex);
+    
+    currentPlayIndex++;
+    currentAudio = null;
+
+    // Naechsten Chunk abspielen oder fertig
+    if (audioQueue.length > 0 || isSpeakingState) {
+      playNextInQueue(options);
+    } else {
+      cleanupTTS();
+      options.onEnd?.();
+    }
+  };
+
+  audio.onerror = () => {
+    URL.revokeObjectURL(nextChunk.url);
+    audioQueue = audioQueue.filter(c => c.index !== currentPlayIndex);
+    currentPlayIndex++;
+    currentAudio = null;
+    // Bei Fehler: naechsten Chunk versuchen
+    playNextInQueue(options);
+  };
+
+  audio.play().catch(() => {
+    // Autoplay blockiert? Naechsten versuchen
+    currentPlayIndex++;
+    currentAudio = null;
+    playNextInQueue(options);
+  });
+}
+
+function playAudioUrl(url: string, volume?: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio(url);
+    audio.volume = volume ?? getTTSVolume();
+    currentAudio = audio;
+
+    audio.onended = () => { currentAudio = null; resolve(); };
+    audio.onerror = () => { currentAudio = null; reject(new Error('Audio-Wiedergabe fehlgeschlagen')); };
+    audio.play().catch(reject);
+  });
+}
+
+function cleanupTTS(): void {
   isSpeakingState = false;
   currentAudio = null;
   
-  // Object-URL freigeben (DSGVO: keine Audio-Daten im Speicher behalten)
-  if (currentAudioUrl) {
-    URL.revokeObjectURL(currentAudioUrl);
-    currentAudioUrl = null;
+  // Alle verbleibenden Object-URLs freigeben
+  for (const chunk of audioQueue) {
+    try { URL.revokeObjectURL(chunk.url); } catch { /* ignore */ }
   }
+  audioQueue = [];
+  currentPlayIndex = 0;
 }
 
 export function stopTTS(): void {
+  ttsAborted = true;
   if (currentAudio) {
     try {
       currentAudio.pause();
       currentAudio.currentTime = 0;
-    } catch (e) {
-      // Ignore
-    }
+    } catch { /* ignore */ }
   }
-  cleanup();
+  cleanupTTS();
 }
 
 export function pauseTTS(): void {
   if (currentAudio && isSpeakingState) {
-    try {
-      currentAudio.pause();
-    } catch (e) {
-      // Ignore
-    }
+    try { currentAudio.pause(); } catch { /* ignore */ }
   }
 }
 
 export function resumeTTS(): void {
   if (currentAudio && isSpeakingState) {
-    try {
-      currentAudio.play();
-    } catch (e) {
-      // Ignore
-    }
+    try { currentAudio.play(); } catch { /* ignore */ }
   }
 }
 
 // ============================================
-// VOICE-WAVEFORM-ANIMATION (visuelles Feedback)
+// WELLENFORM-ANIMATION
 // ============================================
 
 export interface WaveformState {
@@ -417,14 +526,7 @@ export interface WaveformState {
   bars: number[];
 }
 
-/**
- * Generiert animierte Balken für die visuelle Wellenform
- * Simuliert Audio-Aktivität für visuelles Feedback
- */
 export function generateWaveformBars(isActive: boolean): number[] {
   if (!isActive) return [0.1, 0.1, 0.1, 0.1, 0.1];
-  
-  return Array.from({ length: 5 }, () => 
-    0.2 + Math.random() * 0.8
-  );
+  return Array.from({ length: 5 }, () => 0.2 + Math.random() * 0.8);
 }
